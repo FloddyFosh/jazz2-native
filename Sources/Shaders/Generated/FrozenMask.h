@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -476,9 +479,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			FrozenMask_VkVs, FrozenMask_VkVsSize, FrozenMask_VkFs, FrozenMask_VkFsSize },
+			FrozenMask_VkVs, FrozenMask_VkVsSize, FrozenMask_VkFs, FrozenMask_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			FrozenMask_VsMsl, FrozenMask_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -500,9 +508,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			FrozenMask_USE_PALETTE_VkVs, FrozenMask_USE_PALETTE_VkVsSize, FrozenMask_USE_PALETTE_VkFs, FrozenMask_USE_PALETTE_VkFsSize },
+			FrozenMask_USE_PALETTE_VkVs, FrozenMask_USE_PALETTE_VkVsSize, FrozenMask_USE_PALETTE_VkFs, FrozenMask_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			FrozenMask_USE_PALETTE_VsMsl, FrozenMask_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 
@@ -1002,9 +1015,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedFrozenMask_VkVs, BatchedFrozenMask_VkVsSize, BatchedFrozenMask_VkFs, BatchedFrozenMask_VkFsSize },
+			BatchedFrozenMask_VkVs, BatchedFrozenMask_VkVsSize, BatchedFrozenMask_VkFs, BatchedFrozenMask_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedFrozenMask_VsMsl, BatchedFrozenMask_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -1026,9 +1044,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedFrozenMask_USE_PALETTE_VkVs, BatchedFrozenMask_USE_PALETTE_VkVsSize, BatchedFrozenMask_USE_PALETTE_VkFs, BatchedFrozenMask_USE_PALETTE_VkFsSize },
+			BatchedFrozenMask_USE_PALETTE_VkVs, BatchedFrozenMask_USE_PALETTE_VkVsSize, BatchedFrozenMask_USE_PALETTE_VkFs, BatchedFrozenMask_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedFrozenMask_USE_PALETTE_VsMsl, BatchedFrozenMask_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

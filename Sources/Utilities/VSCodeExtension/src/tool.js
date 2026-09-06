@@ -4,7 +4,7 @@
  * Locating and running the offline ShaderCompiler executable.
  *
  * The tool is the extension's source of truth for diagnostics and for every transform preview: its
- * `--check`, `--hlsl`, `--cg`, `--vulkan` and `--essl100-check` modes print to stdout and write
+ * `--check`, `--hlsl`, `--cg`, `--vulkan`, `--msl` and `--essl100-check` modes print to stdout and write
  * nothing, so they are safe to run on an editor buffer. Diagnostics come from stderr in the three
  * shapes analysis.parseDiagnostics() knows.
  *

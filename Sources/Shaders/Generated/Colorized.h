@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -171,9 +174,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			Colorized_VkVs, Colorized_VkVsSize, Colorized_VkFs, Colorized_VkFsSize },
+			Colorized_VkVs, Colorized_VkVsSize, Colorized_VkFs, Colorized_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			Colorized_VsMsl, Colorized_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 
@@ -353,9 +361,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedColorized_VkVs, BatchedColorized_VkVsSize, BatchedColorized_VkFs, BatchedColorized_VkFsSize },
+			BatchedColorized_VkVs, BatchedColorized_VkVsSize, BatchedColorized_VkFs, BatchedColorized_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedColorized_VsMsl, BatchedColorized_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

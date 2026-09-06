@@ -3,6 +3,11 @@
 #include "SdlGfxDevice.h"
 #include "../Graphics/ITextureLoader.h"
 
+#if defined(DEATH_TARGET_IOS) && !defined(WITH_RHI_SOFTWARE) && !defined(WITH_RHI_METAL)
+	// The GL view's framebuffer and renderbuffer handles (see initDevice)
+#	include <SDL_syswm.h>
+#endif
+
 #include "../Graphics/RHI/Rhi.h"
 #if defined(WITH_RHI_GXM)
 #	include "../Application.h"	// setDrawableSize() re-lays the application out for the resized frame surface
@@ -31,6 +36,20 @@
 #		include "SDL2/SDL_vulkan.h"
 #	else
 #		include <SDL_vulkan.h>
+#	endif
+#elif defined(WITH_RHI_METAL)
+// SDL_WINDOW_METAL + the drawable-size query for the Metal window (the Metal view and its CAMetalLayer are
+// created inside MetalDevice from this window via SDL_Metal_CreateView)
+#	if defined(WITH_SDL3)
+#		if defined(__HAS_LOCAL_SDL3)
+#			include "SDL3/SDL_metal.h"
+#		else
+#			include <SDL3/SDL_metal.h>
+#		endif
+#	elif defined(__HAS_LOCAL_SDL)
+#		include "SDL2/SDL_metal.h"
+#	else
+#		include <SDL_metal.h>
 #	endif
 #endif
 
@@ -82,6 +101,9 @@ namespace nCine::Backends
 
 	SDL_Window* SdlGfxDevice::_windowHandle = nullptr;
 	SDL_GLContext SdlGfxDevice::_glContextHandle;
+#if defined(DEATH_TARGET_IOS)
+	unsigned int SdlGfxDevice::_iosColorRenderbuffer = 0;
+#endif
 
 #if defined(WITH_SDL3) && !defined(DEATH_TARGET_VITA)
 	namespace
@@ -136,7 +158,7 @@ namespace nCine::Backends
 	{
 		LOGD("Disposing graphics device...");
 
-		// Uniform across backends: tears down the D3D11 / Vulkan device + swap chain, no-op on OpenGL / software
+		// Uniform across backends: tears down the D3D11 / Vulkan / Metal device + swap chain, no-op on OpenGL / software
 		RHI::Device::DestroySwapchain();
 #if defined(WITH_RHI_SOFTWARE)
 		if (_softwareTexture != nullptr) {
@@ -150,7 +172,7 @@ namespace nCine::Backends
 #elif defined(DEATH_TARGET_VITA)
 		// Vita renders through vitaGL (brought up with vglInit() in initDevice), not an SDL-managed GL context.
 		// No explicit teardown is issued here.
-#elif !defined(WITH_RHI_D3D11) && !defined(WITH_RHI_VULKAN)
+#elif !defined(WITH_RHI_D3D11) && !defined(WITH_RHI_VULKAN) && !defined(WITH_RHI_METAL)
 #	if defined(WITH_RHI_LEGACYGL)
 		// Leave the context idle before it is destroyed - anything still batched refers to memory that is
 		// about to go away with the backend's frame arena
@@ -208,6 +230,9 @@ namespace nCine::Backends
 		SDL_GetWindowSizeInPixels(windowHandle, &width, &height);
 #elif defined(WITH_RHI_VULKAN)
 		SDL_Vulkan_GetDrawableSize(windowHandle, &width, &height);
+#elif defined(WITH_RHI_METAL)
+		// The layer's drawable size once the Metal view exists, the window's pixel size before
+		SDL_Metal_GetDrawableSize(windowHandle, &width, &height);
 #else
 		SDL_GL_GetDrawableSize(windowHandle, &width, &height);
 #endif
@@ -219,7 +244,7 @@ namespace nCine::Backends
 
 	void SdlGfxDevice::setSwapInterval(int interval)
 	{
-#if defined(WITH_RHI_SOFTWARE) || defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN)
+#if defined(WITH_RHI_SOFTWARE) || defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)
 		// No GL context; vsync is fixed at device/swap-chain creation time (see the present path)
 		static_cast<void>(interval);
 #else
@@ -298,9 +323,9 @@ namespace nCine::Backends
 	{
 #if defined(WITH_RHI_SOFTWARE)
 		presentSoftware();
-#elif defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN)
+#elif defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)
 		// When the window is minimized there is no visible surface to present to: unlike a visible swap chain
-		// (whose present blocks on vsync), the D3D11/Vulkan present becomes a non-blocking no-op, so the main
+		// (whose present blocks on vsync), the D3D11/Vulkan/Metal present becomes a non-blocking no-op, so the main
 		// loop would otherwise spin at 100% CPU rendering frames nobody sees. PresentFrame() is still called so
 		// the backend can tidy up any partially-recorded frame, then the loop is throttled to a low rate while
 		// minimized. (The OpenGL and software arms are not compiled here, so they are unaffected.)
@@ -322,7 +347,16 @@ namespace nCine::Backends
 		// is still unsubmitted at this point; the swap below is what makes it visible
 		RHI::Device::PresentFrame();
 #	endif
+#	if defined(DEATH_TARGET_IOS)
+		// SDL presents whatever renderbuffer is bound, and the engine's own render-target renderbuffers may have been
+		// bound since the last frame (see initDevice for the view's framebuffer)
+		glBindRenderbuffer(GL_RENDERBUFFER, _iosColorRenderbuffer);
+#	endif
 		SDL_GL_SwapWindow(_windowHandle);
+#	if defined(DEATH_TARGET_IOS)
+		// SDL rebinds framebuffers of its own during the present, so the engine's cached bindings are stale now
+		RHI::GL::GLFramebuffer::InvalidateCachedBindings();
+#	endif
 #endif
 	}
 
@@ -516,6 +550,17 @@ namespace nCine::Backends
 		SDL_SetHint(SDL_HINT_APP_NAME, NCINE_APP_NAME);
 #endif
 
+#if defined(DEATH_TARGET_IOS)
+		// Landscape only: the game's layout assumes a wide screen
+		SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+		// SDL would otherwise register the accelerometer as a three-axis joystick, which the input manager opens
+		// and the game then takes for a connected gamepad
+		SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+		// Touches drive the on-screen controls through the touch events; a synthesized mouse click on top of them
+		// would reach the menus a second time
+		SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+
 #if !defined(DEATH_TARGET_VITA)
 #	if SDL_VERSION_ATLEAST(2, 24, 0) && defined(SDL_HINT_WINDOWS_DPI_SCALING)
 		// Scaling is handled automatically by SDL (since v2.24.0)
@@ -536,15 +581,24 @@ namespace nCine::Backends
 
 	void SdlGfxDevice::initDevice(int windowPosX, int windowPosY, bool isResizable)
 	{
-#if defined(WITH_RHI_SOFTWARE) || defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN)
+#if defined(DEATH_TARGET_IOS)
+		// One screen, and the application owns all of it: whatever size the configuration carries, the window is the
+		// display (the zero size takes the fullscreen-desktop path below, which then reads the real size back)
+		_width = 0;
+		_height = 0;
+#endif
+#if defined(WITH_RHI_SOFTWARE) || defined(WITH_RHI_D3D11) || defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)
 		// Non-OpenGL backends share one window-creation path: a plain SDL window (no GL context), from which
-		// the backend presenter is then created (SDL renderer blit / DXGI swap chain / VkSwapchainKHR)
+		// the backend presenter is then created (SDL renderer blit / DXGI swap chain / VkSwapchainKHR / CAMetalLayer)
 #	if defined(WITH_RHI_SOFTWARE)
 		LOGD("Initializing window (software renderer)...");
 		Uint32 windowFlags = 0;
 #	elif defined(WITH_RHI_D3D11)
 		LOGD("Initializing window (Direct3D 11 renderer)...");
 		Uint32 windowFlags = 0;
+#	elif defined(WITH_RHI_METAL)
+		LOGD("Initializing window (Metal renderer)...");
+		Uint32 windowFlags = SDL_WINDOW_METAL;
 #	else
 		LOGD("Initializing window (Vulkan renderer)...");
 		Uint32 windowFlags = SDL_WINDOW_VULKAN;
@@ -603,6 +657,14 @@ namespace nCine::Backends
 				_drawableWidth, _drawableHeight, _displayMode.hasVSync());
 #			endif
 			FATAL_ASSERT_MSG(created, "Failed to create the Direct3D 11 device and swap chain");
+		}
+#		elif defined(WITH_RHI_METAL)
+		{
+			// The Metal backend takes the SDL_Window* directly (it attaches the Metal view to it via the SDL Metal
+			// API and presents through the view's CAMetalLayer)
+			const bool created = RHI::Device::CreateSwapchain(reinterpret_cast<void*>(_windowHandle),
+				_drawableWidth, _drawableHeight, _displayMode.hasVSync());
+			FATAL_ASSERT_MSG(created, "Failed to create the Metal device (no Metal-capable GPU is available on this machine)");
 		}
 #		else
 		{
@@ -751,6 +813,23 @@ namespace nCine::Backends
 #if defined(RHI_GL_PROFILE_ES) || defined(DEATH_TARGET_EMSCRIPTEN)
 		FATAL_ASSERT_MSG(_glContextHandle, "SDL_GL_CreateContext() with OpenGL|ES {}.{} failed: {}",
 			_contextInfo.majorVersion, _contextInfo.minorVersion, SDL_GetError());
+#	if defined(DEATH_TARGET_IOS)
+		// iOS has no system framebuffer: framebuffer object 0 is nothing, and the screen is a framebuffer SDL's GL view
+		// owns (a color renderbuffer backed by the CAEAGLLayer). Every "unbind" of the engine, which is how it returns
+		// from a render target to the screen, has to bind that object instead, and its renderbuffer has to be the
+		// bound one when the frame is presented (see update()). Both handles come from SDL's window-manager info.
+		{
+			SDL_SysWMinfo wmInfo;
+			SDL_VERSION(&wmInfo.version);
+			if (SDL_GetWindowWMInfo(_windowHandle, &wmInfo) == SDL_TRUE && wmInfo.subsystem == SDL_SYSWM_UIKIT) {
+				RHI::GL::GLFramebuffer::SetDefaultHandle(wmInfo.info.uikit.framebuffer);
+				_iosColorRenderbuffer = wmInfo.info.uikit.colorbuffer;
+				LOGI("Using the UIKit view's framebuffer {} (renderbuffer {}) as the screen", wmInfo.info.uikit.framebuffer, wmInfo.info.uikit.colorbuffer);
+			} else {
+				LOGE("SDL_GetWindowWMInfo() failed, nothing can be drawn to the screen: {}", SDL_GetError());
+			}
+		}
+#	endif
 #else
 		FATAL_ASSERT_MSG(_glContextHandle, _contextInfo.coreProfile ? "SDL_GL_CreateContext() with OpenGL Core {}.{} failed: {}" : "SDL_GL_CreateContext() with OpenGL {}.{} failed: {}",
 			_contextInfo.majorVersion, _contextInfo.minorVersion, SDL_GetError());

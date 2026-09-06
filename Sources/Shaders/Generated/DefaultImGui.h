@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace nCine::ShadersGen
@@ -143,9 +146,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			DefaultImGui_VkVs, DefaultImGui_VkVsSize, DefaultImGui_VkFs, DefaultImGui_VkFsSize },
+			DefaultImGui_VkVs, DefaultImGui_VkVsSize, DefaultImGui_VkFs, DefaultImGui_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			DefaultImGui_VsMsl, DefaultImGui_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

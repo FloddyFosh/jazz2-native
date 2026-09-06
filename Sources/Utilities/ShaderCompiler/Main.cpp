@@ -23,6 +23,7 @@
 #include "Emit.h"
 #include "Essl100.h"
 #include "Hlsl.h"
+#include "Msl.h"
 #include "Vulkan.h"
 #include "GlslToCpp.h"
 #include "ConsoleFixedFunction.h"
@@ -229,6 +230,7 @@ namespace
 			"  --no-dxbc         Embed HLSL sources instead of precompiled DXBC bytecode (default: DXBC via\n"
 			"                    d3dcompiler_47 when available, with the HLSL text left out of the header)\n"
 			"  --vulkan          Print the Vulkan GLSL (#version 450) transform of every stage to stdout\n"
+			"  --msl             Print the Metal Shading Language transform of every stage to stdout\n"
 			"  --glslang <path>  glslangValidator to compile SPIR-V with (default: VULKAN_SDK / PATH)\n"
 			"  --cgcomp <path>   cgcomp to compile RSX microcode with (default: PS3DEV / PATH)\n"
 			"  --target <t>      Selects an inspection target for the transform dump (only: essl100)\n"
@@ -236,7 +238,7 @@ namespace
 			"Standalone modes:\n"
 			"  --generate-all [--shaders-dir <dir>] [--out-dir <dir>] [--check] [--no-dxbc] [--glslang <path>] [--cgcomp <path>]\n"
 			"                                                    Regenerate every committed artifact (the shared types, one\n"
-			"                                                    header per shader, the umbrella and the five aggregates)\n"
+			"                                                    header per shader, the umbrella and the aggregates)\n"
 			"                                                    from one enumeration of the shader directory; --check only\n"
 			"                                                    compares and never writes into the tree. Both directories\n"
 			"                                                    are auto-detected\n"
@@ -369,6 +371,36 @@ namespace
 					} else {
 						dump += "vulkan: " + diag.Message + " (line " + Death::format("{}", diag.Line) + ")\n";
 					}
+				}
+			}
+		}
+		return dump;
+	}
+
+	/**
+		Builds the Metal Shading Language transform dump printed by --msl: one section per program / variant /
+		stage, with either the emitted MSL or an "unsupported" diagnostic. Inspection-only - never touches the
+		emitted header. There is no MSL compiler outside Xcode, so this is also the one place to eyeball what
+		the Metal backend will hand to MTLDevice::newLibrary().
+	*/
+	String BuildMslDump(const SmallVectorImpl<ProgramReflection>& programs)
+	{
+		String dump;
+		for (const ProgramReflection& program : programs) {
+			for (const VariantReflection& v : program.Variants) {
+				for (std::int32_t stage = 0; stage < 2; stage++) {
+					const bool vertexStage = (stage == 0);
+					dump += "=== " + program.Document->ProgramName + (v.Name.empty() ? String("") : String(" [" + v.Name + "]")) + " ";
+					dump += (vertexStage ? "--- vertex (msl) ---\n" : "--- fragment (msl) ---\n");
+					String modern = ShaderParser::BuildStageSource(*program.Document, vertexStage, v.Define);
+					String msl;
+					Diagnostic diag;
+					if (MslEmitter::Transform(modern, vertexStage, v.Reflection, msl, diag)) {
+						dump += msl;
+					} else {
+						dump += "// unsupported: " + diag.Message + "\n";
+					}
+					dump += "\n";
 				}
 			}
 		}
@@ -2401,9 +2433,9 @@ namespace
 
 		// One header per shader; "Default*.shader" are the nCine default programs, everything else is Jazz2
 		SmallVector<String, 0> includeStems, jazz2Programs, ncinePrograms;
-		// The Direct3D 11 and Vulkan stage artifacts of every shader, collected here and written as one
+		// The Direct3D 11, Vulkan and Metal stage artifacts of every shader, collected here and written as one
 		// aggregate each below - see BackendArtifacts for why they do not go into the per-shader headers
-		SmallVector<std::pair<String, String>, 0> d3d11Bodies, vulkanBodies;
+		SmallVector<std::pair<String, String>, 0> d3d11Bodies, vulkanBodies, metalBodies;
 		for (const String& shaderName : shaderNames) {
 			StringView stem = fs::GetFileNameWithoutExtension(shaderName);
 			const bool isDefault = stem.hasPrefix("Default"_s);
@@ -2428,6 +2460,7 @@ namespace
 			}
 			d3d11Bodies.emplace_back(String{ns}, std::move(artifacts.D3d11));
 			vulkanBodies.emplace_back(String{ns}, std::move(artifacts.Vulkan));
+			metalBodies.emplace_back(String{ns}, std::move(artifacts.Metal));
 			String headerName = stem + ".h"_s;
 			String headerPath = fs::CombinePath(outputDirectory, headerName);
 			if (!WriteStringToFile(headerPath, output)) {
@@ -2470,7 +2503,11 @@ namespace
 				{ "Direct3D 11", "WITH_RHI_D3D11", "D3d11GeneratedShaders.h", &d3d11Bodies,
 					dxbcWorks, "no working DXBC compiler (D3DCompile is Windows-only)" },
 				{ "Vulkan", "WITH_RHI_VULKAN", "VulkanGeneratedShaders.h", &vulkanBodies,
-					spirvWorks, "no working glslang" }
+					spirvWorks, "no working glslang" },
+				// MSL is compiled on the Mac at load time, so the aggregate is plain source and every machine
+				// can (and does) rebuild it
+				{ "Metal", "WITH_RHI_METAL", "MetalGeneratedShaders.h", &metalBodies,
+					true, "" }
 			};
 			for (const auto& aggregate : aggregates) {
 				String path = fs::CombinePath(outputDirectory, aggregate.FileName);
@@ -2860,6 +2897,7 @@ int main(int argc, char* argv[])
 	bool hlslDump = false;
 	bool cgDump = false;
 	bool vulkanDump = false;
+	bool mslDump = false;
 	bool noDxbc = false;
 	const char* glslangOverride = nullptr;
 	for (int i = 1; i < argc; i++) {
@@ -2888,6 +2926,8 @@ int main(int argc, char* argv[])
 			noDxbc = true;
 		} else if (arg == "--vulkan") {
 			vulkanDump = true;
+		} else if (arg == "--msl") {
+			mslDump = true;
 		} else if (arg == "--glslang") {
 			if (i + 1 >= argc) {
 				std::fprintf(stderr, "error: --glslang requires a path argument\n");
@@ -2920,7 +2960,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (inputPath == nullptr || (!checkOnly && !essl100Check && !hlslDump && !cgDump && !vulkanDump && outputPath == nullptr)) {
+	if (inputPath == nullptr || (!checkOnly && !essl100Check && !hlslDump && !cgDump && !vulkanDump && !mslDump && outputPath == nullptr)) {
 		PrintUsage();
 		return 2;
 	}
@@ -3025,6 +3065,12 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
+	if (mslDump) {
+		String dump = BuildMslDump(programs);
+		std::fwrite(dump.data(), 1, dump.size(), stdout);
+		return 0;
+	}
+
 	if (checkOnly) {
 		String dump;
 		for (const ProgramReflection& program : programs) {
@@ -3088,8 +3134,8 @@ int main(int argc, char* argv[])
 	// and rewriting them from one input would drop the rest. The header it just wrote references symbols
 	// the committed aggregates already define, so it only links against a matching pair; regenerating a
 	// shader whose stage artifacts changed means running --generate-all on a machine that can rebuild them.
-	if (!artifacts.D3d11.empty() || !artifacts.Vulkan.empty()) {
-		std::fprintf(stdout, "note: Direct3D 11 / Vulkan stage artifacts were not written "
+	if (!artifacts.D3d11.empty() || !artifacts.Vulkan.empty() || !artifacts.Metal.empty()) {
+		std::fprintf(stdout, "note: Direct3D 11 / Vulkan / Metal stage artifacts were not written "
 			"(they live in the aggregates, which only --generate-all produces)\n");
 	}
 	return 0;

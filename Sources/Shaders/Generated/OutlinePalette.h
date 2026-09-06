@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -273,9 +276,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			OutlinePalette_VkVs, OutlinePalette_VkVsSize, OutlinePalette_VkFs, OutlinePalette_VkFsSize },
+			OutlinePalette_VkVs, OutlinePalette_VkVsSize, OutlinePalette_VkFs, OutlinePalette_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			OutlinePalette_VsMsl, OutlinePalette_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 
@@ -557,9 +565,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedOutlinePalette_VkVs, BatchedOutlinePalette_VkVsSize, BatchedOutlinePalette_VkFs, BatchedOutlinePalette_VkFsSize },
+			BatchedOutlinePalette_VkVs, BatchedOutlinePalette_VkVsSize, BatchedOutlinePalette_VkFs, BatchedOutlinePalette_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedOutlinePalette_VsMsl, BatchedOutlinePalette_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

@@ -12,6 +12,8 @@
 #	define _i1a "\nDirect3D 11"
 #elif defined(WITH_RHI_VULKAN)
 #	define _i1a "\nVulkan"
+#elif defined(WITH_RHI_METAL)
+#	define _i1a "\nMetal"
 #elif defined(WITH_RHI_GXM)
 #	define _i1a "\nGXM"
 #elif defined(WITH_RHI_GS)

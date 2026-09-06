@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -609,9 +612,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			TexturedBackground_VkVs, TexturedBackground_VkVsSize, TexturedBackground_VkFs, TexturedBackground_VkFsSize },
+			TexturedBackground_VkVs, TexturedBackground_VkVsSize, TexturedBackground_VkFs, TexturedBackground_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			TexturedBackground_VsMsl, TexturedBackground_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "DITHER", "DITHER",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -633,9 +641,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			TexturedBackground_DITHER_VkVs, TexturedBackground_DITHER_VkVsSize, TexturedBackground_DITHER_VkFs, TexturedBackground_DITHER_VkFsSize },
+			TexturedBackground_DITHER_VkVs, TexturedBackground_DITHER_VkVsSize, TexturedBackground_DITHER_VkFs, TexturedBackground_DITHER_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			TexturedBackground_DITHER_VsMsl, TexturedBackground_DITHER_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

@@ -99,6 +99,10 @@ namespace nCine::Backends
 		static SDL_Window* _windowHandle;
 		/** @brief SDL2 OpenGL context handle */
 		static SDL_GLContext _glContextHandle;
+#if defined(DEATH_TARGET_IOS)
+		/** @brief Color renderbuffer of SDL's GL view, which must be bound when a frame is presented (see @ref update()) */
+		static unsigned int _iosColorRenderbuffer;
+#endif
 
 		/** @brief Deleted copy constructor */
 		SdlGfxDevice(const SdlGfxDevice&) = delete;

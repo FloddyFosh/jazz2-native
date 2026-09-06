@@ -152,6 +152,72 @@ cmake -B build -D CMAKE_BUILD_TYPE=Debug -A x64 ^
 Additionaly, a code-signing certificate is required to create an installable `.msixbundle` package.
 See @ref building-config-params-uwp for more details.
 
+@subsection building-ios Building for iOS
+
+The iOS build (iPhone and iPad) is cross-compiled on a Mac with **Xcode** installed --- the Command Line
+Tools alone carry no iOS SDK. CMake's own iOS support is used (no toolchain file): `CMAKE_SYSTEM_NAME=iOS`
+together with the SDK (`CMAKE_OSX_SYSROOT`, `iphoneos` or `iphonesimulator`), the architecture
+(`CMAKE_OSX_ARCHITECTURES`, `arm64` for devices; the simulator runs the Mac's own architecture) and the
+minimum iOS version (`CMAKE_OSX_DEPLOYMENT_TARGET`, `14.0` is the default and the lowest the launch screen
+in the `Info.plist` supports). None of the prebuilt dependency archives cover iOS, so **SDL2**, **OpenAL Soft**,
+**Ogg/Vorbis** and **libcurl** are downloaded as source and compiled as part of the build (CMake 3.18 or newer),
+like **libopenmpt**, **lz4** and **Zstd** already are everywhere; **zlib** comes from the SDK.
+
+@code{.sh}
+cmake -B build -G Xcode \
+    -D CMAKE_SYSTEM_NAME=iOS \
+    -D CMAKE_OSX_ARCHITECTURES=arm64 \
+    -D CMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+    -D NCINE_IOS_DEVELOPMENT_TEAM=<Apple Developer team ID>
+@endcode
+
+@m_class{m-noindent}
+
+The **Xcode** generator produces a project that signs the application with the given team (automatic
+signing) and installs it on a connected device from Xcode itself. Without a team the bundle is left
+unsigned, which is what the simulator wants. The same configuration works with **Ninja** (or Makefiles),
+which is the quickest way to an unsigned bundle for the iOS Simulator of the Mac's own architecture:
+
+@code{.sh}
+cmake -B build -G Ninja \
+    -D CMAKE_SYSTEM_NAME=iOS \
+    -D CMAKE_OSX_SYSROOT=iphonesimulator \
+    -D CMAKE_OSX_ARCHITECTURES=$(uname -m) \
+    -D CMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+    -D CMAKE_BUILD_TYPE=Release
+cmake --build build
+@endcode
+
+@m_class{m-noindent}
+
+A device bundle built this way has to be signed before a device accepts it: `NCINE_IOS_CODESIGN_IDENTITY` and
+`NCINE_IOS_PROVISIONING_PROFILE` run `codesign` after the build (or use the Xcode generator). See
+@ref building-config-params-ios for the parameters behind both.
+
+The result is the flat `jazz2.app` bundle (assembled at build time, there is no install or CPack step):
+the executable, the `Info.plist`, the icons scaled from `Sources/Icons/1024px.png` and the `Content`
+directory copied from `NCINE_CONTENT_DIR`. The original game files go to the application's `Documents/Source`
+directory, which the bundle exposes through file sharing (the **Files** app, or *Finder*); the converted cache
+lives in `Library/Caches`, where the system may reclaim it (it is then rebuilt on the next start), and the trace
+log `Jazz2.log` is written next to `Source`. A simulator build is installed and started with:
+
+@code{.sh}
+xcrun simctl boot <device UDID from `xcrun simctl list devices`>
+xcrun simctl install booted build/jazz2.app
+xcrun simctl launch --console booted jazz2.resurrection
+@endcode
+
+@m_class{m-noindent}
+
+**Metal** is the default rendering backend (the same backend and offline MSL as on macOS, see
+`NCINE_PREFERRED_RHI`), with the **OpenGL|ES** 3.0 profile of the `OpenGL` backend as the alternative --- Apple
+deprecated it in iOS 12 but still ships it, and it is the one the iOS Simulator can run on a Mac without a
+Metal-capable GPU. **SDL2** is the only window backend: it provides the UIKit window, the touch, game-controller
+and keyboard input, the on-screen keyboard and the application lifecycle (the game suspends whenever it leaves
+the foreground, as on Android). LAN server discovery uses multicast, which iOS 14 and newer only allow with the
+`com.apple.developer.networking.multicast` entitlement granted by Apple; without it, servers are joined by
+address.
+
 @subsection building-consoles Building for consoles
 
 Ten consoles are supported, each cross-compiled with its own SDK and its own CMake toolchain file.
@@ -293,14 +359,15 @@ The following parameters can be used to customize the build:
     -   The generated shader headers are committed to the repository, so turning it off never affects the game
 -   `NCINE_BUILD_LIBRETRO` (default @cpp OFF @ce) --- Build as a **libretro** core instead of an executable, see @ref consoles-libretro
     -   Only `Software` and `OpenGL` are valid values of `NCINE_PREFERRED_RHI` in this configuration
--   `NCINE_PREFERRED_BACKEND` (default @cpp "GLFW" @ce, @cpp "SDL2" @ce on **PS Vita** and **Nintendo Switch**) --- Preferred core backend
+-   `NCINE_PREFERRED_BACKEND` (default @cpp "GLFW" @ce, @cpp "SDL2" @ce on **PS Vita**, **Nintendo Switch** and **iOS**, where it is also the only choice) --- Preferred core backend
     -   Possible values: `GLFW`, `SDL2`, `SDL3`
     -   Ignored on **Android**, **UWP** and the @ref consoles "consoles with a bespoke window backend"
--   `NCINE_PREFERRED_RHI` (default @cpp "OpenGL" @ce, @cpp "GXM" @ce on **PS Vita**) --- Preferred rendering backend (RHI)
+-   `NCINE_PREFERRED_RHI` (default @cpp "OpenGL" @ce, @cpp "GXM" @ce on **PS Vita**, @cpp "Metal" @ce on **iOS**) --- Preferred rendering backend (RHI)
     -   Possible values:
         - `OpenGL` --- Uses the OpenGL family (which profile is chosen with `NCINE_RHI_GL_PROFILE`)
         - `D3D11` --- Uses Direct3D 11 (**Windows** with the **MSVC** toolchain only)
-        - `Vulkan` --- Uses Vulkan
+        - `Vulkan` --- Uses Vulkan (on **macOS** through MoltenVK: the backend enables the portability extensions the loader needs, but the Vulkan SDK's loader and MoltenVK have to be installed or shipped next to the executable)
+        - `Metal` --- Uses Metal (**macOS** and **iOS**; the offline MSL sources are compiled on the device at load time, no Xcode is needed to build for macOS)
         - `GXM` --- Uses **sceGxm** directly (**PlayStation Vita** only), see @ref consoles-vita
         - `RSX` --- Uses **libgcm** directly (**PlayStation 3** only), see @ref consoles-ps3
         - `PVR` --- Fixed-function PowerVR backend on top of KallistiOS (**Sega Dreamcast** only), see @ref consoles-dreamcast
@@ -331,9 +398,10 @@ The following parameters can be used to customize the build:
         - `Core` --- OpenGL 3.3 core profile (GLSL 330, uniform buffer objects, `gl_VertexID`)
         - `ES3` --- **OpenGL|ES** 3.0, and **WebGL** 2.0 on **Emscripten** (ESSL 300 es)
         - `ES2` --- **OpenGL|ES** 2.0 (ESSL 100, no uniform buffer objects, no `gl_VertexID`, no buffer mapping)
-    -   Defaults to `ES3` on **Android**, **Emscripten**, **Nintendo Switch**, ARM Linux and **ANGLE** builds,
+    -   Defaults to `ES3` on **Android**, **Emscripten**, **Nintendo Switch**, **iOS**, ARM Linux and **ANGLE** builds,
         and to `Core` elsewhere; pinned to `ES2` on **PS Vita** (vitaGL is an **OpenGL|ES** 2.0 implementation)
-        and to `ES3` for the libretro core
+        and to `ES3` for the libretro core (also the only profile on **iOS**, whose OpenGL|ES has no EGL for the `ES2`
+        vertex-array-object entry points)
     -   Every profile builds on every platform that can provide the matching client library, so an `ES2` build
         on Android or on the desktop is a normal configuration --- it is how the low-end paths are tested
         without the target hardware
@@ -356,7 +424,7 @@ The following parameters can be used to customize the build:
         @m_span{m-text m-dim} (see @ref consoles-psp-limits) @m_endspan
 -   `NCINE_WITH_ANGLE` (default @cpp OFF @ce except on UWP) --- Enable Google **ANGLE** library support
 -   `NCINE_WITH_GLEW` (default @cpp ON @ce) --- Use **GLEW** library, only offered for `NCINE_RHI_GL_PROFILE=Core`
--   `NCINE_WITH_BACKWARD` (default @cpp ON @ce except on Android, Emscripten and UWP) --- Enable better exception handling
+-   `NCINE_WITH_BACKWARD` (default @cpp ON @ce except on Android, iOS, Emscripten and UWP) --- Enable better exception handling
 -   `NCINE_WITH_WEBP` @m_class{m-label m-danger m-flat} **deprecated** --- Enable `.webp` image file support, requires **libwebp** library
 -   `NCINE_WITH_AUDIO` (default @cpp ON @ce) --- Enable audio support, requires **OpenAL** library on desktop; the consoles use their own backends, see @ref consoles-common-audio
 -   `NCINE_WITH_VORBIS` (default @cpp ON @ce) --- Enable `.ogg` audio file support, requires **libvorbis** library
@@ -388,6 +456,22 @@ The following parameters can be used to customize the build:
     -   Possible values: `arm64-v8a` (for 64-bit ARM), `armeabi-v7a` (for 32-bit ARM), `x86`, `x86_64`
 -   `NCINE_UNIVERSAL_APK` (default @cpp OFF @ce) --- Create universal APK containing all specified CPU architectures
 -   `NDK_DIR` --- Android NDK directory, usually detected automatically
+
+@subsubsection building-config-params-ios Platform-specific parameters for iOS
+
+The platform itself is selected with CMake's own variables --- `CMAKE_SYSTEM_NAME=iOS`, `CMAKE_OSX_SYSROOT`
+(`iphoneos` or `iphonesimulator`), `CMAKE_OSX_ARCHITECTURES` and `CMAKE_OSX_DEPLOYMENT_TARGET` --- see
+@ref building-ios. These decide how the bundle is identified and signed:
+
+-   `NCINE_IOS_BUNDLE_IDENTIFIER` (default @cpp "jazz2.resurrection" @ce) --- Bundle identifier of the application;
+    a personal team's provisioning may require an identifier of its own
+-   `NCINE_IOS_DEVELOPMENT_TEAM` --- Apple Developer team ID; the **Xcode** generator signs the application with
+    it (automatic signing), and a **Ninja**/**Makefile** device build derives its entitlements from it. Empty by
+    default, which leaves the bundle unsigned (simulator only)
+-   `NCINE_IOS_CODESIGN_IDENTITY` --- `codesign` identity (e.g. @cpp "Apple Development" @ce) that signs the bundle
+    after a **Ninja**/**Makefile** device build; not used by the **Xcode** generator, which signs on its own
+-   `NCINE_IOS_PROVISIONING_PROFILE` --- Provisioning profile (`.mobileprovision`) embedded into a
+    **Ninja**/**Makefile** device build next to the signature
 
 @subsubsection building-config-params-linux Platform-specific parameters for Linux
 

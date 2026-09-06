@@ -2390,6 +2390,16 @@ namespace nCine::RHI::Vulkan
 		}
 		const char* validationLayer = "VK_LAYER_KHRONOS_validation";
 
+		// MoltenVK (Vulkan over Metal on macOS) is not a fully conformant implementation, and since Vulkan SDK
+		// 1.3.216 the loader HIDES such "portability" devices unless the instance opts in with
+		// VK_KHR_portability_enumeration + the ENUMERATE_PORTABILITY flag - without it PickPhysicalDevice()
+		// finds no device at all on a Mac. The extension only exists where a portability driver is installed,
+		// so enabling it whenever it is advertised costs nothing elsewhere.
+		const bool wantPortability = hasInstanceExt("VK_KHR_portability_enumeration");
+		if (wantPortability) {
+			instanceExts.push_back("VK_KHR_portability_enumeration");
+		}
+
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = NCINE_APP;
@@ -2401,6 +2411,11 @@ namespace nCine::RHI::Vulkan
 		VkInstanceCreateInfo ici = {};
 		ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		ici.pApplicationInfo = &appInfo;
+		if (wantPortability) {
+			// VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR (0x00000001), spelled out so the build does not
+			// depend on a header new enough to define the KHR extension's flag
+			ici.flags |= 0x00000001u;
+		}
 		ici.enabledExtensionCount = std::uint32_t(instanceExts.size());
 		ici.ppEnabledExtensionNames = instanceExts.empty() ? nullptr : instanceExts.data();
 		if (wantValidation) {
@@ -2473,12 +2488,33 @@ namespace nCine::RHI::Vulkan
 		VkPhysicalDeviceFeatures enabledFeatures = {};
 		enabledFeatures.depthClamp = s_depthClamp ? VK_TRUE : VK_FALSE;
 
-		const char* deviceExts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		// A portability device (MoltenVK) exports VK_KHR_portability_subset, and the spec REQUIRES the
+		// application to enable it when it is present - a validation error, and on some loaders a failed
+		// vkCreateDevice, otherwise. Its feature struct is left at the defaults: nothing this backend draws
+		// relies on a feature the subset withholds (the triangle fans and line loops the engine issues are
+		// emulated by MoltenVK itself through its own index rewriting).
+		std::uint32_t deviceExtCount = 1;
+		const char* deviceExts[2] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, nullptr };
+		{
+			std::uint32_t extCount = 0;
+			vkEnumerateDeviceExtensionProperties(s_physicalDevice, nullptr, &extCount, nullptr);
+			std::vector<VkExtensionProperties> exts(extCount);
+			if (extCount > 0) {
+				vkEnumerateDeviceExtensionProperties(s_physicalDevice, nullptr, &extCount, exts.data());
+			}
+			for (const VkExtensionProperties& e : exts) {
+				if (std::strcmp(e.extensionName, "VK_KHR_portability_subset") == 0) {
+					deviceExts[deviceExtCount++] = "VK_KHR_portability_subset";
+					LOGI("Vulkan portability device (MoltenVK): VK_KHR_portability_subset enabled");
+					break;
+				}
+			}
+		}
 		VkDeviceCreateInfo dci = {};
 		dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		dci.queueCreateInfoCount = queueInfoCount;
 		dci.pQueueCreateInfos = queueInfos;
-		dci.enabledExtensionCount = 1;
+		dci.enabledExtensionCount = deviceExtCount;
 		dci.ppEnabledExtensionNames = deviceExts;
 		dci.pEnabledFeatures = &enabledFeatures;
 		if (!CheckVk(vkCreateDevice(s_physicalDevice, &dci, nullptr, &s_device), "vkCreateDevice")) {

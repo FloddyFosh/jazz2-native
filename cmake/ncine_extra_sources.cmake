@@ -14,7 +14,8 @@ endif()
 
 # Client library and profile macros of the OpenGL family backend. Only this backend has a GL dependency at
 # all: the software rasterizer draws on the CPU, the console backends talk to their own hardware API, and
-# D3D11 / Vulkan bring their own (d3d11/dxgi/d3dcompiler, resp. a dynamically loaded vulkan-1). None of them
+# D3D11 / Vulkan / Metal bring their own (d3d11/dxgi/d3dcompiler, a dynamically loaded vulkan-1, the Metal
+# framework). None of them
 # must drag in a GL runtime - pspdev even ships a libGL (pspgl) wrapping the very GE the GU backend drives
 # itself, which find_package(OpenGL) happily locates.
 if(NCINE_PREFERRED_RHI STREQUAL "OpenGL")
@@ -40,6 +41,10 @@ if(NCINE_PREFERRED_RHI STREQUAL "OpenGL")
 		elseif(ANDROID OR EMSCRIPTEN)
 			# Android links libGLESv2/libGLESv3 and libEGL from the NDK (see the Android bridge CMakeLists);
 			# Emscripten's WebGL implementation is part of the runtime the linker provides itself
+		elseif(IOS)
+			# OpenGL|ES is a system framework on iOS (deprecated since iOS 12, still shipped); the context comes
+			# from SDL's EAGL view, so there is no EGL to link either
+			target_link_libraries(${NCINE_APP} PRIVATE "-framework OpenGLES")
 		elseif(TARGET OpenGLES2::GLES2)
 			target_link_libraries(${NCINE_APP} PRIVATE EGL::EGL OpenGLES2::GLES2)
 		else()
@@ -162,6 +167,20 @@ elseif(NCINE_PREFERRED_RHI STREQUAL "Vulkan")
 	# Header-only Khronos Vulkan-Headers (fetched in ncine_imported_targets.cmake). No vulkan-1.lib is linked:
 	# the loader binds the runtime vulkan-1.dll (shipped with GPU drivers) dynamically through SDL at startup.
 	target_include_directories(${NCINE_APP} PRIVATE "${VULKAN_HEADERS_INCLUDE_DIR}")
+elseif(NCINE_PREFERRED_RHI STREQUAL "Metal")
+	# Selects the Metal backend in RhiFwd.h/Rhi.h instead of the default OpenGL family backend (macOS and iOS
+	# share it: metal-cpp and the CAMetalLayer bridge compile against both SDKs, the few macOS-only calls -
+	# managed storage, display sync, the low-power query - are gated in the backend itself)
+	message(STATUS "Rendering backend: Metal")
+	target_compile_definitions(${NCINE_APP} PRIVATE "WITH_RHI_METAL")
+	# Header-only Apple metal-cpp (fetched in ncine_imported_targets.cmake) over the system frameworks
+	target_include_directories(${NCINE_APP} PRIVATE "${METAL_CPP_INCLUDE_DIR}")
+	target_link_libraries(${NCINE_APP} PRIVATE "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+	# The CAMetalLayer bridge is the backend's one Objective-C++ file (the language itself is enabled in the top-level
+	# CMakeLists.txt, before the dependencies - see there for why). It manages the objects it hands to the C++
+	# side by hand (an explicit retain the C++ side releases through metal-cpp), so ARC stays off for it.
+	set_source_files_properties("${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalLayerBridge.mm"
+		PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
 else()
 	# OpenGL/WebGL is the default rendering backend
 	if(NCINE_RHI_GL_PROFILE STREQUAL "ES2")
@@ -387,6 +406,11 @@ if(NOT DEDICATED_SERVER AND NOT NCINE_BUILD_LIBRETRO)
 		else()
 			target_compile_definitions(${NCINE_APP} PRIVATE "WITH_SDL2")
 			target_link_libraries(${NCINE_APP} PRIVATE SDL2::SDL2)
+			if(IOS)
+				# SDL2main carries the real `main()` on iOS (it starts the UIApplication and calls the game's
+				# `SDL_main`, see Sources/Main.cpp); it is a separate static library of the source build
+				target_link_libraries(${NCINE_APP} PRIVATE SDL2::SDL2main)
+			endif()
 		endif()
 
 		list(APPEND HEADERS

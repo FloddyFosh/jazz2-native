@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -382,9 +385,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			PartialWhiteMask_VkVs, PartialWhiteMask_VkVsSize, PartialWhiteMask_VkFs, PartialWhiteMask_VkFsSize },
+			PartialWhiteMask_VkVs, PartialWhiteMask_VkVsSize, PartialWhiteMask_VkFs, PartialWhiteMask_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			PartialWhiteMask_VsMsl, PartialWhiteMask_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -406,9 +414,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			PartialWhiteMask_USE_PALETTE_VkVs, PartialWhiteMask_USE_PALETTE_VkVsSize, PartialWhiteMask_USE_PALETTE_VkFs, PartialWhiteMask_USE_PALETTE_VkFsSize },
+			PartialWhiteMask_USE_PALETTE_VkVs, PartialWhiteMask_USE_PALETTE_VkVsSize, PartialWhiteMask_USE_PALETTE_VkFs, PartialWhiteMask_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			PartialWhiteMask_USE_PALETTE_VsMsl, PartialWhiteMask_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 
@@ -814,9 +827,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedPartialWhiteMask_VkVs, BatchedPartialWhiteMask_VkVsSize, BatchedPartialWhiteMask_VkFs, BatchedPartialWhiteMask_VkFsSize },
+			BatchedPartialWhiteMask_VkVs, BatchedPartialWhiteMask_VkVsSize, BatchedPartialWhiteMask_VkFs, BatchedPartialWhiteMask_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedPartialWhiteMask_VsMsl, BatchedPartialWhiteMask_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -838,9 +856,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedPartialWhiteMask_USE_PALETTE_VkVs, BatchedPartialWhiteMask_USE_PALETTE_VkVsSize, BatchedPartialWhiteMask_USE_PALETTE_VkFs, BatchedPartialWhiteMask_USE_PALETTE_VkFsSize },
+			BatchedPartialWhiteMask_USE_PALETTE_VkVs, BatchedPartialWhiteMask_USE_PALETTE_VkVsSize, BatchedPartialWhiteMask_USE_PALETTE_VkFs, BatchedPartialWhiteMask_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedPartialWhiteMask_USE_PALETTE_VsMsl, BatchedPartialWhiteMask_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

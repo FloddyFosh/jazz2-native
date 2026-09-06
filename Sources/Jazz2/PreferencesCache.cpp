@@ -1125,6 +1125,15 @@ namespace
 #			else
 		theApplication().AttachTraceTarget(fs::CombinePath(configDir, "Jazz2.log"_s));
 #			endif
+#		elif defined(DEATH_TARGET_IOS)
+		// No terminal and no command line on a phone, so the log always goes to a file - into "Documents", where
+		// the user can reach it through the Files app (next to "Source", see ContentResolver)
+		{
+			auto& resolver = ContentResolver::Get();
+			String logDir = fs::GetDirectoryName(resolver.GetSourcePath());
+			fs::CreateDirectories(logDir);
+			theApplication().AttachTraceTarget(fs::CombinePath(logDir, "Jazz2.log"_s));
+		}
 #		elif defined(DEATH_TARGET_APPLE) || defined(DEATH_TARGET_UNIX) || (defined(DEATH_TARGET_WINDOWS) && !defined(DEATH_TARGET_WINDOWS_RT))
 		DEATH_UNUSED bool logFileSpecified = false;
 		for (std::int32_t i = 0; i < config.argc(); i++) {
@@ -1810,6 +1819,10 @@ namespace
 		deviceName[deviceNameLength] = '\0';
 
 		String deviceDesc = format("{}|Android {}{}|{}|2|{}", hostName, sdkVersion, systemSuffix, deviceName, arch);
+#elif defined(DEATH_TARGET_IOS)
+		String appleVersion = Environment::GetAppleVersion();
+		String deviceModel = Environment::GetAppleDeviceModel();
+		String deviceDesc = format("{}|iOS {}{}|{}|6|{}", hostName, appleVersion, systemSuffix, deviceModel, arch);
 #elif defined(DEATH_TARGET_APPLE)
 		String appleVersion = Environment::GetAppleVersion();
 		String deviceDesc = format("{}|macOS {}{}||5|{}", hostName, appleVersion, systemSuffix, arch);

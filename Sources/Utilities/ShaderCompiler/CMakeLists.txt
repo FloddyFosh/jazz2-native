@@ -37,6 +37,8 @@ set(SOURCES
 	GlslToCpp.h
 	Hlsl.cpp
 	Hlsl.h
+	Msl.cpp
+	Msl.h
 	ShaderParser.cpp
 	ShaderParser.h
 	Vulkan.cpp

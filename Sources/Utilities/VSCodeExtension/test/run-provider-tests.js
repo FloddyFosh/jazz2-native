@@ -206,7 +206,7 @@ const uTintColumn = SRC.split('\n')[8].indexOf('uTint') + 1;
 	check('top level offers directives', has(top, 'program') && has(top, 'variant') && has(top, 'render_mode'));
 	check('top level offers entry points', has(top, 'vertex') && has(top, 'fragment') && has(top, 'fixed_function'));
 	check('top level offers #include', has(top, '#include'));
-	check('top level offers stage macros', has(top, 'VERTEX_STAGE') && has(top, 'SOFTWARE_RENDERER'));
+	check('top level offers stage macros', has(top, 'VERTEX_STAGE') && has(top, 'SOFTWARE_RENDERER') && has(top, 'LOW_POWER_GPU'));
 	check('top level offers this file\'s uniforms', has(top, 'uTexture') && has(top, 'uTint'));
 
 	const frag = await I.completionProvider.provideCompletionItems(doc, new Position(8, 10));
@@ -241,7 +241,7 @@ const uTintColumn = SRC.split('\n')[8].indexOf('uTint') + 1;
 
 	const targetDoc = makeDocument('void fixed_function(p\n', '/x/y.shader');
 	const targetItems = await I.completionProvider.provideCompletionItems(targetDoc, new Position(0, 21));
-	check('fixed_function targets offered', labels(targetItems).sort().join(',') === 'gs,gu,gx,legacygl,pvr,rdp', labels(targetItems).join(','));
+	check('fixed_function targets offered', labels(targetItems).sort().join(',') === 'gs,gu,gx,legacygl,pica,pvr,rdp', labels(targetItems).join(','));
 
 	// custom mode must not offer the canvas built-ins
 	const customDoc = makeDocument('program P;\nvoid vertex() {\n\tgl_Position = vec4(0.0);\n}\nvoid fragment() {\n\tCOLOR = vec4(1.0);\n}\n', '/x/c.shader');
@@ -445,7 +445,7 @@ const uTintColumn = SRC.split('\n')[8].indexOf('uTint') + 1;
 
 	// ----- dump modes cover every documented inspection flag
 	const flags = Object.keys(I.DUMP_MODES).map(k => I.DUMP_MODES[k].flag).sort().join(' ');
-	check('all five dump flags wired', flags === '--cg --check --essl100-check --hlsl --vulkan', flags);
+	check('all six dump flags wired', flags === '--cg --check --essl100-check --hlsl --msl --vulkan', flags);
 
 	log('');
 	log(pass + ' passed, ' + fail + ' failed');

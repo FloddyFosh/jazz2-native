@@ -1305,22 +1305,32 @@ namespace Jazz2::UI
 		GenericGraphicResource* base = res->Base;
 		// Aligned by the full cell, then shifted to where this frame's area begins in it (see GetFrameOffset)
 		Vector2f adjustedPos = ApplyAlignment(align, Vector2f(x, y), base->FrameDimensions.As<float>());
-		Recti clippedRect = base->GetFrameRect(frame);
-		Vector2i clippedOffset = base->GetFrameOffset(frame);
-		Vector2f size = Vector2f(clippedRect.W * clipX, clippedRect.H * clipY);
-		adjustedPos += Vector2f((float)clippedOffset.X, (float)clippedOffset.Y);
+		Recti frameRect = base->GetFrameRect(frame);
+		Vector2i frameOffset = base->GetFrameOffset(frame);
+		adjustedPos += Vector2f((float)frameOffset.X, (float)frameOffset.Y);
+
+		// The clip is a fraction of the logical cell, not of the frame's own area --- on a tightly packed sheet
+		// the frame is trimmed to its opaque pixels and offset inside the cell, so clipping its own width would
+		// cut somewhere else entirely (the boss health bar, calibrated in cell fractions, lost 8% at both ends)
+		float visibleW = std::floor(base->FrameDimensions.X * clipX) - frameOffset.X;
+		float visibleH = std::floor(base->FrameDimensions.Y * clipY) - frameOffset.Y;
+		if (visibleW <= 0.0f || visibleH <= 0.0f) {
+			// Nothing of this frame falls inside the clipped area
+			return;
+		}
+		visibleW = std::min(visibleW, (float)frameRect.W);
+		visibleH = std::min(visibleH, (float)frameRect.H);
 
 		Vector2i texSize = base->TextureDiffuse->GetSize();
-		const Recti& frameRect = clippedRect;
 		Vector4f texCoords = Vector4f(
-			std::floor(float(frameRect.W) * clipX) / float(texSize.X),
+			visibleW / float(texSize.X),
 			float(frameRect.X) / float(texSize.X),
-			std::floor(float(frameRect.H) * clipY) / float(texSize.Y),
+			visibleH / float(texSize.Y),
 			float(frameRect.Y) / float(texSize.Y)
 		);
 
 		std::int32_t paletteOffset = ((base->Flags & GenericGraphicResourceFlags::Indexed) == GenericGraphicResourceFlags::Indexed ? res->PaletteOffset : -1);
-		DrawTexture(*base->TextureDiffuse.get(), adjustedPos, z, size, texCoords, color, false, 0.0f, paletteOffset);
+		DrawTexture(*base->TextureDiffuse.get(), adjustedPos, z, Vector2f(visibleW, visibleH), texCoords, color, false, 0.0f, paletteOffset);
 	}
 
 	AnimState HUD::GetCurrentWeapon(Actors::Player* player, WeaponType weapon, Vector2f& offset)

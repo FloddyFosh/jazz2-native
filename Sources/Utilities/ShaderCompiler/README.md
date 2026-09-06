@@ -14,7 +14,7 @@ The primary mode turns one `.shader` file into one generated header:
 
 ```
 ShaderCompiler <input.shader> -o <output.h> [-n <namespace>] [--glslang <path>]
-ShaderCompiler <input.shader> --check | --essl100-check | --hlsl | --cg | --vulkan
+ShaderCompiler <input.shader> --check | --essl100-check | --hlsl | --cg | --vulkan | --msl
 ```
 
 | Option | Meaning |
@@ -28,11 +28,12 @@ ShaderCompiler <input.shader> --check | --essl100-check | --hlsl | --cg | --vulk
 | `--hlsl` | Print the HLSL (Shader Model 4/5) transform of every stage to stdout |
 | `--cg` | Print the Cg transform of every stage to stdout, in the dialect the PS Vita's sceGxm backend compiles (see below) |
 | `--vulkan` | Print the Vulkan GLSL (`#version 450`) transform of every stage to stdout — does not require glslang |
+| `--msl` | Print the Metal Shading Language transform of every stage to stdout (see the Metal section below) |
 | `--help`, `-h`, `/?` | Print the usage text (to stderr) and exit successfully |
 
-The five dump switches write nothing — they print to stdout and never touch the committed
+The six dump switches write nothing — they print to stdout and never touch the committed
 artifacts. They are not mutually exclusive but they are ordered: when several are combined the
-first of `--essl100-check`, `--hlsl`, `--cg`, `--vulkan`, `--check` wins and the others are ignored.
+first of `--essl100-check`, `--hlsl`, `--cg`, `--vulkan`, `--msl`, `--check` wins and the others are ignored.
 `--glslang` is ignored by every dump path.
 
 Seven **standalone modes** are recognized only as the *first* argument (anywhere else they are
@@ -138,17 +139,18 @@ nothing there references it. Vertex attributes — the case that used to *requir
 bare `in` global leaking into the fragment stage would create a bogus varying — are covered by
 the `attribute` keyword instead.
 
-### The backend conditionals (`SOFTWARE_RENDERER`, `NO_DYNAMIC_BRANCHING`)
+### The backend conditionals (`SOFTWARE_RENDERER`, `NO_DYNAMIC_BRANCHING`, `LOW_POWER_GPU`)
 
-Two macros are resolved when a stage source is *built* rather than at assembly time, because their
+Three macros are resolved when a stage source is *built* rather than at assembly time, because their
 value depends on the emission rather than on the stage:
 
 | Macro | Defined by | Why a shader gates on it |
 |---|---|---|
 | `SOFTWARE_RENDERER` | `--emit-sw-generated` only | A fragment path that is too expensive to interpret per pixel can carry a cheaper CPU form |
 | `NO_DYNAMIC_BRANCHING` | `--emit-rsx` (PlayStation 3) only | A fragment stage compiling to NV40 `IF`/`LOOP`/`BRK` control flow does not survive cgcomp — the branch body overwrites registers the surrounding code still holds |
+| `LOW_POWER_GPU` | `--emit-cg` (PS Vita, sceGxm) only | Says nothing about what the SGX543 *can* compile (it runs every shader as written), only about how much per-pixel work it can sustain — an operation invisible on a desktop GPU can be most of its frame, so the shader gates a cheaper approximation on it instead of dropping the feature for everyone |
 
-Neither macro ever appears in a built source, and reflection is always taken from the view where
+None of the macros ever appears in a built source, and reflection is always taken from the view where
 both are undefined (desktop GL), so the two sides must agree on declarations that reflect. Gating a
 block therefore changes nothing for any other backend:
 
@@ -898,6 +900,49 @@ HLSL sources (`HlslVsSource`/`HlslFsSource`) as before and the D3D11 backend run
 dependency of the generated artifacts — headers built without it still compile everywhere. All the
 D3D11 artifacts (blobs or sources) are gated behind `#if defined(WITH_RHI_D3D11)`, so other backend
 builds carry none of them.
+
+## Metal target (MSL, compiled on the Mac)
+
+Each already-lowered modern-GLSL stage is also transformed to Metal Shading Language by `Msl.h`/`.cpp`
+(`--msl` prints the transform) for the macOS Metal backend. Like the PS Vita's Cg, the artifact is
+**source**: there is no MSL compiler outside Xcode, so the backend compiles the text through
+`MTLDevice::newLibrary()` at load time (Metal's compiler service caches the result per source across
+runs), and the aggregate `Generated/MetalGeneratedShaders.h` — two MSL strings per program variant,
+gated behind `#if defined(WITH_RHI_METAL)` — is rebuilt by every regeneration on every machine, since it
+needs no tool beyond this one. The emitter re-emits the stage from the same typed AST the HLSL and Vulkan
+emitters use; what makes MSL different from either:
+
+- MSL has no globals other than `constant` data and no implicit access to entry-point arguments, so every
+  uniform reaches the shader as an argument: the loose uniforms gather into one `_Globals` struct at
+  `[[buffer(0)]]`, each `std140` block becomes a `constant Block&` at `[[buffer(1 + i)]]` (reflection
+  order) and each sampler a `texture2d<float>` + `sampler` pair at `[[texture(j)]]` / `[[sampler(j)]]`.
+  The vertex stream is bound at `[[buffer(30)]]`. Helper functions that (transitively) read any of these —
+  or a varying, an attribute, a fragment output — receive them as extra trailing parameters, and every
+  call site forwards them (the arrangement SPIRV-Cross produces for the same problem).
+- The `constant` structs are laid out with C rules, which agree with `std140` for the whole shipped set
+  (`float`/`int`, `vec2`, `vec4`, `mat3`, `mat4` and structs of those). The emitter checks every member
+  against its reflected `std140` offset, pads where MSL would place it earlier, spells a `vec3` as
+  `packed_float3` where a later member sits in its tail, and **declines** a block it cannot make agree (a
+  `mat2`, a `bool`, an array of scalars or `vec2`), so a layout mismatch can never reach the GPU silently.
+- The engine renders GL-style and the Metal backend keeps the GL row order of every render target, so the
+  vertex epilogue negates `gl_Position.y` for every draw (the backend flips the front-face winding to match
+  and presents through a fullscreen triangle that maps the drawable's top row onto the last row). With
+  that flip `gl_FragCoord` is exactly the fragment `[[position]]`.
+- Varyings carry `[[user(locnN)]]` in declaration order so the two stages link by index, integer and
+  `flat` varyings get `[[flat]]` (Metal requires it), a single fragment output returns
+  `float4 [[color(0)]]` and multiple outputs render to `[[color(0..N)]]` in declaration order — the same
+  order the HLSL and SPIR-V emissions assign.
+- Built-ins keep their names where MSL has them; `inversesqrt`→`rsqrt`, `dFdx`/`dFdy`→`dfdx`/`dfdy`,
+  `atan(y,x)`→`atan2`, `mod`→`a - b*floor(a/b)`, the relational built-ins become operators, a vector
+  `==`/`!=` becomes `all()`/`any()` (GLSL's is a scalar) and `mix()` with a boolean selector becomes
+  `select()`.
+
+There is no `--msl-check`: the only MSL compiler is Xcode's. `tests/MslShimCheck.py` type-checks every
+emitted stage with an ordinary clang against a small stand-in `metal_stdlib` instead, which catches
+undeclared names, arity and type mismatches and malformed declarations (not MSL-only semantic rules).
+On a Mac with Xcode, `tests/MslMetalCheck.py` is the real check: it compiles every stage of the committed
+`MetalGeneratedShaders.h` with Apple's `metal` compiler, for the `macosx` and the `iphoneos` SDK (the one
+emitted MSL serves both the macOS and the iOS backend).
 
 ## PlayStation Vita target (Cg → GXP on the console)
 

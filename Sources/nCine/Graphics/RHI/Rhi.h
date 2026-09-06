@@ -217,4 +217,19 @@
 #include "Vulkan/VulkanDevice.h"
 #include "Vulkan/VulkanRhiCapabilities.h"
 
+#elif defined(WITH_RHI_METAL)
+
+#include "Metal/MetalDebug.h"
+#include "Metal/MetalShader.h"
+#include "Metal/MetalBufferObject.h"
+#include "Metal/MetalTexture.h"
+#include "Metal/MetalVertexFormat.h"
+#include "Metal/MetalShaderTypes.h"
+#include "Metal/MetalUniformCache.h"
+#include "Metal/MetalShaderUniforms.h"
+#include "Metal/MetalShaderProgram.h"
+#include "Metal/MetalRenderTarget.h"
+#include "Metal/MetalDevice.h"
+#include "Metal/MetalRhiCapabilities.h"
+
 #endif

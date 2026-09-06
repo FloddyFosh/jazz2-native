@@ -739,7 +739,8 @@ var DUMP_MODES = {
 	showEssl100: { flag: '--essl100-check', title: 'ESSL 100', previewLanguage: 'glsl' },
 	showHlsl: { flag: '--hlsl', title: 'HLSL', previewLanguage: 'hlsl' },
 	showCg: { flag: '--cg', title: 'Cg', previewLanguage: 'hlsl' },
-	showVulkan: { flag: '--vulkan', title: 'Vulkan GLSL', previewLanguage: 'glsl' }
+	showVulkan: { flag: '--vulkan', title: 'Vulkan GLSL', previewLanguage: 'glsl' },
+	showMsl: { flag: '--msl', title: 'Metal Shading Language', previewLanguage: 'cpp' }
 };
 
 async function showDump(modeName) {

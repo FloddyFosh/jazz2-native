@@ -76,6 +76,10 @@
 				"title": "Death™ Shader: Show Vulkan GLSL Transform (--vulkan)"
 			},
 			{
+				"command": "deathShader.showMsl",
+				"title": "Death™ Shader: Show Metal Shading Language Transform (--msl)"
+			},
+			{
 				"command": "deathShader.validateNow",
 				"title": "Death™ Shader: Validate Current File"
 			},
@@ -110,6 +114,11 @@
 					"command": "deathShader.showEssl100",
 					"when": "resourceLangId == death-shader",
 					"group": "deathshader@5"
+				},
+				{
+					"command": "deathShader.showMsl",
+					"when": "resourceLangId == death-shader",
+					"group": "deathshader@6"
 				}
 			],
 			"commandPalette": [
@@ -131,6 +140,10 @@
 				},
 				{
 					"command": "deathShader.showVulkan",
+					"when": "resourceLangId == death-shader"
+				},
+				{
+					"command": "deathShader.showMsl",
 					"when": "resourceLangId == death-shader"
 				},
 				{

@@ -512,7 +512,7 @@ function builtinChecks(rawText, scanned, options) {
 	// A compile-time macro is resolved by the compiler and never defined in an emitted source, so
 	// #ifdef / #ifndef and #if / #elif expressions are all fine but defining one is not
 	var badStageForm = allMatches(
-		/^[ \t]*#[ \t]*(define|undef)\b.*\b(VERTEX_STAGE|FRAGMENT_STAGE|SOFTWARE_RENDERER|NO_DYNAMIC_BRANCHING)\b.*$/gm, scan.text);
+		/^[ \t]*#[ \t]*(define|undef)\b.*\b(VERTEX_STAGE|FRAGMENT_STAGE|SOFTWARE_RENDERER|NO_DYNAMIC_BRANCHING|LOW_POWER_GPU)\b.*$/gm, scan.text);
 	for (i = 0; i < badStageForm.length; i++) {
 		var stageLine = lineOfOffset(scan.text, badStageForm[i].index);
 		report(stageLine, 0, lineLength(stageLine),

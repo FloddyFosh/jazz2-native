@@ -1,0 +1,262 @@
+// Minimal stand-in for Apple's <metal_stdlib>, used ONLY to type-check the MSL the ShaderCompiler emits with
+// an ordinary clang on Linux (there is no MSL compiler outside Xcode). It models the subset the emitter
+// produces: the vector/matrix types (clang ext_vector_type gives swizzles and component-wise operators),
+// the texture/sampler objects, the address-space keywords and the built-in functions. Attributes like
+// [[position]] / [[buffer(0)]] are unknown to clang and simply ignored (-Wno-unknown-attributes). This is a
+// proxy check, not Apple's compiler: it catches undeclared names, arity/type mismatches, bad swizzles, wrong
+// member names and malformed declarations, but not MSL-only semantic rules.
+#pragma once
+
+#include <cmath>
+#include <cstdint>
+#include <type_traits>
+
+#define vertex
+#define fragment
+#define kernel
+#define constant const
+#define device
+#define thread
+#define threadgroup
+
+namespace metal
+{
+	typedef unsigned int uint;
+	typedef unsigned short ushort;
+	typedef unsigned char uchar;
+
+	typedef float float2 __attribute__((ext_vector_type(2)));
+	typedef float float3 __attribute__((ext_vector_type(3)));
+	typedef float float4 __attribute__((ext_vector_type(4)));
+	typedef int int2 __attribute__((ext_vector_type(2)));
+	typedef int int3 __attribute__((ext_vector_type(3)));
+	typedef int int4 __attribute__((ext_vector_type(4)));
+	typedef unsigned int uint2 __attribute__((ext_vector_type(2)));
+	typedef unsigned int uint3 __attribute__((ext_vector_type(3)));
+	typedef unsigned int uint4 __attribute__((ext_vector_type(4)));
+	// Comparisons on ext vectors yield int vectors in clang, so the bool vectors are int vectors here
+	typedef int bool2 __attribute__((ext_vector_type(2)));
+	typedef int bool3 __attribute__((ext_vector_type(3)));
+	typedef int bool4 __attribute__((ext_vector_type(4)));
+	typedef float3 packed_float3;
+	typedef int3 packed_int3;
+	typedef uint3 packed_uint3;
+
+	// ---- constructors (the harness rewrites "float4(" -> "mk_float4(" etc. before compiling) ----
+
+	template<class T> struct vec_traits { static constexpr int size = 1; };
+	template<> struct vec_traits<float2> { static constexpr int size = 2; };
+	template<> struct vec_traits<float3> { static constexpr int size = 3; };
+	template<> struct vec_traits<float4> { static constexpr int size = 4; };
+	template<> struct vec_traits<int2> { static constexpr int size = 2; };
+	template<> struct vec_traits<int3> { static constexpr int size = 3; };
+	template<> struct vec_traits<int4> { static constexpr int size = 4; };
+	template<> struct vec_traits<uint2> { static constexpr int size = 2; };
+	template<> struct vec_traits<uint3> { static constexpr int size = 3; };
+	template<> struct vec_traits<uint4> { static constexpr int size = 4; };
+
+	template<class S> inline float mk_float(S x) { return (float)x; }
+	template<class S> inline int mk_int(S x) { return (int)x; }
+	template<class S> inline uint mk_uint(S x) { return (uint)x; }
+	template<class S> inline bool mk_bool(S x) { return (bool)x; }
+
+#define MK_VEC2(V, E) \
+	template<class S> inline auto mk_##V(S x) -> std::enable_if_t<std::is_arithmetic<S>::value, V> { return V{(E)x, (E)x}; } \
+	template<class W> inline auto mk_##V(W v) -> std::enable_if_t<vec_traits<W>::size == 2, V> { return __builtin_convertvector(v, V); } \
+	template<class A, class B> inline auto mk_##V(A a, B b) -> std::enable_if_t<std::is_arithmetic<A>::value && std::is_arithmetic<B>::value, V> { return V{(E)a, (E)b}; }
+#define MK_VEC3(V, V2, E) \
+	template<class S> inline auto mk_##V(S x) -> std::enable_if_t<std::is_arithmetic<S>::value, V> { return V{(E)x, (E)x, (E)x}; } \
+	template<class W> inline auto mk_##V(W v) -> std::enable_if_t<vec_traits<W>::size == 3, V> { return __builtin_convertvector(v, V); } \
+	template<class A, class B, class C> inline auto mk_##V(A a, B b, C c) -> std::enable_if_t<std::is_arithmetic<A>::value && std::is_arithmetic<B>::value && std::is_arithmetic<C>::value, V> { return V{(E)a, (E)b, (E)c}; } \
+	template<class W, class B> inline auto mk_##V(W ab, B c) -> std::enable_if_t<vec_traits<W>::size == 2 && std::is_arithmetic<B>::value, V> { return V{(E)ab.x, (E)ab.y, (E)c}; } \
+	template<class A, class W> inline auto mk_##V(A a, W bc) -> std::enable_if_t<std::is_arithmetic<A>::value && vec_traits<W>::size == 2, V> { return V{(E)a, (E)bc.x, (E)bc.y}; }
+#define MK_VEC4(V, E) \
+	template<class S> inline auto mk_##V(S x) -> std::enable_if_t<std::is_arithmetic<S>::value, V> { return V{(E)x, (E)x, (E)x, (E)x}; } \
+	template<class W> inline auto mk_##V(W v) -> std::enable_if_t<vec_traits<W>::size == 4, V> { return __builtin_convertvector(v, V); } \
+	template<class A, class B, class C, class D> inline auto mk_##V(A a, B b, C c, D d) -> std::enable_if_t<std::is_arithmetic<A>::value && std::is_arithmetic<B>::value && std::is_arithmetic<C>::value && std::is_arithmetic<D>::value, V> { return V{(E)a, (E)b, (E)c, (E)d}; } \
+	template<class W, class C, class D> inline auto mk_##V(W ab, C c, D d) -> std::enable_if_t<vec_traits<W>::size == 2 && std::is_arithmetic<C>::value && std::is_arithmetic<D>::value, V> { return V{(E)ab.x, (E)ab.y, (E)c, (E)d}; } \
+	template<class A, class W, class D> inline auto mk_##V(A a, W bc, D d) -> std::enable_if_t<std::is_arithmetic<A>::value && vec_traits<W>::size == 2 && std::is_arithmetic<D>::value, V> { return V{(E)a, (E)bc.x, (E)bc.y, (E)d}; } \
+	template<class A, class B, class W> inline auto mk_##V(A a, B b, W cd) -> std::enable_if_t<std::is_arithmetic<A>::value && std::is_arithmetic<B>::value && vec_traits<W>::size == 2, V> { return V{(E)a, (E)b, (E)cd.x, (E)cd.y}; } \
+	template<class W, class X> inline auto mk_##V(W ab, X cd) -> std::enable_if_t<vec_traits<W>::size == 2 && vec_traits<X>::size == 2, V> { return V{(E)ab.x, (E)ab.y, (E)cd.x, (E)cd.y}; } \
+	template<class W, class D> inline auto mk_##V(W abc, D d) -> std::enable_if_t<vec_traits<W>::size == 3 && std::is_arithmetic<D>::value, V> { return V{(E)abc.x, (E)abc.y, (E)abc.z, (E)d}; } \
+	template<class A, class W> inline auto mk_##V(A a, W bcd) -> std::enable_if_t<std::is_arithmetic<A>::value && vec_traits<W>::size == 3, V> { return V{(E)a, (E)bcd.x, (E)bcd.y, (E)bcd.z}; }
+
+	MK_VEC2(float2, float) MK_VEC3(float3, float2, float) MK_VEC4(float4, float)
+	MK_VEC2(int2, int) MK_VEC3(int3, int2, int) MK_VEC4(int4, int)
+	MK_VEC2(uint2, uint) MK_VEC3(uint3, uint2, uint) MK_VEC4(uint4, uint)
+	MK_VEC2(bool2, int) MK_VEC3(bool3, bool2, int) MK_VEC4(bool4, int)
+
+	// ---- matrices (column-major, like MSL/GLSL) ----
+
+	struct float2x2 { float2 c[2]; float2& operator[](int i) { return c[i]; } const float2& operator[](int i) const { return c[i]; } };
+	struct float3x3 { float3 c[3]; float3& operator[](int i) { return c[i]; } const float3& operator[](int i) const { return c[i]; } };
+	struct float4x4 { float4 c[4]; float4& operator[](int i) { return c[i]; } const float4& operator[](int i) const { return c[i]; } };
+
+	inline float2x2 mk_float2x2(float2 a, float2 b) { return float2x2{{a, b}}; }
+	inline float2x2 mk_float2x2(float d) { return float2x2{{{d, 0}, {0, d}}}; }
+	inline float2x2 mk_float2x2(const float2x2& m) { return m; }
+	inline float3x3 mk_float3x3(float3 a, float3 b, float3 c) { return float3x3{{a, b, c}}; }
+	inline float3x3 mk_float3x3(float d) { return float3x3{{{d, 0, 0}, {0, d, 0}, {0, 0, d}}}; }
+	inline float3x3 mk_float3x3(const float3x3& m) { return m; }
+	inline float3x3 mk_float3x3(float a, float b, float c, float d, float e, float f, float g, float h, float i) { return float3x3{{{a, b, c}, {d, e, f}, {g, h, i}}}; }
+	inline float4x4 mk_float4x4(float4 a, float4 b, float4 c, float4 d) { return float4x4{{a, b, c, d}}; }
+	inline float4x4 mk_float4x4(float d) { return float4x4{{{d, 0, 0, 0}, {0, d, 0, 0}, {0, 0, d, 0}, {0, 0, 0, d}}}; }
+	inline float4x4 mk_float4x4(const float4x4& m) { return m; }
+
+	inline float2 operator*(const float2x2& m, float2 v) { return m.c[0] * v.x + m.c[1] * v.y; }
+	inline float3 operator*(const float3x3& m, float3 v) { return m.c[0] * v.x + m.c[1] * v.y + m.c[2] * v.z; }
+	inline float4 operator*(const float4x4& m, float4 v) { return m.c[0] * v.x + m.c[1] * v.y + m.c[2] * v.z + m.c[3] * v.w; }
+	inline float2 operator*(float2 v, const float2x2& m) { return float2{v.x * m.c[0].x + v.y * m.c[0].y, v.x * m.c[1].x + v.y * m.c[1].y}; }
+	inline float3 operator*(float3 v, const float3x3& m) { float3 r; for (int i = 0; i < 3; i++) r[i] = v.x * m.c[i].x + v.y * m.c[i].y + v.z * m.c[i].z; return r; }
+	inline float4 operator*(float4 v, const float4x4& m) { float4 r; for (int i = 0; i < 4; i++) r[i] = v.x * m.c[i].x + v.y * m.c[i].y + v.z * m.c[i].z + v.w * m.c[i].w; return r; }
+	inline float2x2 operator*(const float2x2& a, const float2x2& b) { return float2x2{{a * b.c[0], a * b.c[1]}}; }
+	inline float3x3 operator*(const float3x3& a, const float3x3& b) { return float3x3{{a * b.c[0], a * b.c[1], a * b.c[2]}}; }
+	inline float4x4 operator*(const float4x4& a, const float4x4& b) { return float4x4{{a * b.c[0], a * b.c[1], a * b.c[2], a * b.c[3]}}; }
+	inline float3x3 operator*(const float3x3& a, float s) { return float3x3{{a.c[0] * s, a.c[1] * s, a.c[2] * s}}; }
+	inline float4x4 operator*(const float4x4& a, float s) { return float4x4{{a.c[0] * s, a.c[1] * s, a.c[2] * s, a.c[3] * s}}; }
+	inline float3x3 operator*(float s, const float3x3& a) { return a * s; }
+	inline float4x4 operator*(float s, const float4x4& a) { return a * s; }
+	inline float3x3 transpose(const float3x3& m) { float3x3 r; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) r.c[i][j] = m.c[j][i]; return r; }
+	inline float4x4 transpose(const float4x4& m) { float4x4 r; for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) r.c[i][j] = m.c[j][i]; return r; }
+	inline float2x2 transpose(const float2x2& m) { float2x2 r; for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) r.c[i][j] = m.c[j][i]; return r; }
+	inline float determinant(const float2x2& m) { return m.c[0].x * m.c[1].y - m.c[1].x * m.c[0].y; }
+	inline float determinant(const float3x3& m) { return 0.0f * m.c[0].x; }
+	inline float determinant(const float4x4& m) { return 0.0f * m.c[0].x; }
+
+	// ---- textures & samplers ----
+
+	struct sampler {};
+	struct level { explicit level(float) {} };
+	struct bias { explicit bias(float) {} };
+	template<class T> struct texture2d
+	{
+		float4 sample(sampler, float2) const { return float4{}; }
+		float4 sample(sampler, float2, level) const { return float4{}; }
+		float4 sample(sampler, float2, bias) const { return float4{}; }
+		float4 read(uint2, uint lod = 0) const { return float4{}; }
+		uint get_width(uint lod = 0) const { return 1; }
+		uint get_height(uint lod = 0) const { return 1; }
+	};
+	template<class T> struct texture3d
+	{
+		float4 sample(sampler, float3) const { return float4{}; }
+		float4 sample(sampler, float3, level) const { return float4{}; }
+		float4 read(uint3, uint lod = 0) const { return float4{}; }
+		uint get_width(uint lod = 0) const { return 1; }
+		uint get_height(uint lod = 0) const { return 1; }
+	};
+	template<class T> struct texturecube
+	{
+		float4 sample(sampler, float3) const { return float4{}; }
+		float4 sample(sampler, float3, level) const { return float4{}; }
+	};
+
+	// ---- built-in functions ----
+
+	// Component-wise lifting of a scalar function over the float vectors
+#define LIFT1(F, IMPL) \
+	inline float F(float x) { return IMPL(x); } \
+	inline float2 F(float2 v) { float2 r; for (int i = 0; i < 2; i++) r[i] = IMPL(v[i]); return r; } \
+	inline float3 F(float3 v) { float3 r; for (int i = 0; i < 3; i++) r[i] = IMPL(v[i]); return r; } \
+	inline float4 F(float4 v) { float4 r; for (int i = 0; i < 4; i++) r[i] = IMPL(v[i]); return r; }
+#define LIFT2(F, IMPL) \
+	inline float F(float a, float b) { return IMPL(a, b); } \
+	inline float2 F(float2 a, float2 b) { float2 r; for (int i = 0; i < 2; i++) r[i] = IMPL(a[i], b[i]); return r; } \
+	inline float3 F(float3 a, float3 b) { float3 r; for (int i = 0; i < 3; i++) r[i] = IMPL(a[i], b[i]); return r; } \
+	inline float4 F(float4 a, float4 b) { float4 r; for (int i = 0; i < 4; i++) r[i] = IMPL(a[i], b[i]); return r; } \
+	inline float2 F(float2 a, float b) { float2 r; for (int i = 0; i < 2; i++) r[i] = IMPL(a[i], b); return r; } \
+	inline float3 F(float3 a, float b) { float3 r; for (int i = 0; i < 3; i++) r[i] = IMPL(a[i], b); return r; } \
+	inline float4 F(float4 a, float b) { float4 r; for (int i = 0; i < 4; i++) r[i] = IMPL(a[i], b); return r; }
+
+	inline float s_fract(float x) { return x - std::floor(x); }
+	inline float s_rsqrt(float x) { return 1.0f / std::sqrt(x); }
+	inline float s_saturate(float x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+	inline float s_sign(float x) { return x > 0 ? 1.0f : (x < 0 ? -1.0f : 0.0f); }
+	inline float s_step(float e, float x) { return x < e ? 0.0f : 1.0f; }
+	inline float s_min(float a, float b) { return a < b ? a : b; }
+	inline float s_max(float a, float b) { return a > b ? a : b; }
+	inline float s_ident(float x) { return x; }
+
+	LIFT1(sin, std::sin) LIFT1(cos, std::cos) LIFT1(tan, std::tan) LIFT1(asin, std::asin) LIFT1(acos, std::acos) LIFT1(atan, std::atan)
+	LIFT1(sinh, std::sinh) LIFT1(cosh, std::cosh) LIFT1(tanh, std::tanh)
+	LIFT1(exp, std::exp) LIFT1(exp2, std::exp2) LIFT1(log, std::log) LIFT1(log2, std::log2) LIFT1(sqrt, std::sqrt)
+	LIFT1(floor, std::floor) LIFT1(ceil, std::ceil) LIFT1(round, std::round) LIFT1(trunc, std::trunc)
+	LIFT1(fract, s_fract) LIFT1(rsqrt, s_rsqrt) LIFT1(saturate, s_saturate) LIFT1(sign, s_sign)
+	LIFT1(dfdx, s_ident) LIFT1(dfdy, s_ident) LIFT1(fwidth, s_ident) LIFT1(normalize, s_ident)
+	LIFT2(pow, std::pow) LIFT2(atan2, std::atan2) LIFT2(fmod, std::fmod) LIFT2(step, s_step)
+	LIFT2(min, s_min) LIFT2(max, s_max)
+
+	inline float abs(float x) { return std::fabs(x); }
+	inline float2 abs(float2 v) { float2 r; for (int i = 0; i < 2; i++) r[i] = std::fabs(v[i]); return r; }
+	inline float3 abs(float3 v) { float3 r; for (int i = 0; i < 3; i++) r[i] = std::fabs(v[i]); return r; }
+	inline float4 abs(float4 v) { float4 r; for (int i = 0; i < 4; i++) r[i] = std::fabs(v[i]); return r; }
+	inline int abs(int x) { return x < 0 ? -x : x; }
+	inline int2 abs(int2 v) { return v; }
+	inline int3 abs(int3 v) { return v; }
+	inline int4 abs(int4 v) { return v; }
+	inline int min(int a, int b) { return a < b ? a : b; }
+	inline int max(int a, int b) { return a > b ? a : b; }
+	inline uint min(uint a, uint b) { return a < b ? a : b; }
+	inline uint max(uint a, uint b) { return a > b ? a : b; }
+	inline int2 min(int2 a, int2 b) { return a; } inline int3 min(int3 a, int3 b) { return a; } inline int4 min(int4 a, int4 b) { return a; }
+	inline int2 max(int2 a, int2 b) { return a; } inline int3 max(int3 a, int3 b) { return a; } inline int4 max(int4 a, int4 b) { return a; }
+	inline int clamp(int x, int lo, int hi) { return x < lo ? lo : (x > hi ? hi : x); }
+	inline uint clamp(uint x, uint lo, uint hi) { return x < lo ? lo : (x > hi ? hi : x); }
+	inline int2 clamp(int2 x, int2 lo, int2 hi) { return x; } inline int3 clamp(int3 x, int3 lo, int3 hi) { return x; } inline int4 clamp(int4 x, int4 lo, int4 hi) { return x; }
+	inline int2 clamp(int2 x, int lo, int hi) { return x; } inline int3 clamp(int3 x, int lo, int hi) { return x; } inline int4 clamp(int4 x, int lo, int hi) { return x; }
+
+	inline float clamp(float x, float lo, float hi) { return s_min(s_max(x, lo), hi); }
+	inline float2 clamp(float2 x, float2 lo, float2 hi) { return min(max(x, lo), hi); }
+	inline float3 clamp(float3 x, float3 lo, float3 hi) { return min(max(x, lo), hi); }
+	inline float4 clamp(float4 x, float4 lo, float4 hi) { return min(max(x, lo), hi); }
+	inline float2 clamp(float2 x, float lo, float hi) { return min(max(x, lo), hi); }
+	inline float3 clamp(float3 x, float lo, float hi) { return min(max(x, lo), hi); }
+	inline float4 clamp(float4 x, float lo, float hi) { return min(max(x, lo), hi); }
+
+	inline float mix(float a, float b, float t) { return a + (b - a) * t; }
+	inline float2 mix(float2 a, float2 b, float t) { return a + (b - a) * t; }
+	inline float3 mix(float3 a, float3 b, float t) { return a + (b - a) * t; }
+	inline float4 mix(float4 a, float4 b, float t) { return a + (b - a) * t; }
+	inline float2 mix(float2 a, float2 b, float2 t) { return a + (b - a) * t; }
+	inline float3 mix(float3 a, float3 b, float3 t) { return a + (b - a) * t; }
+	inline float4 mix(float4 a, float4 b, float4 t) { return a + (b - a) * t; }
+	inline float smoothstep(float e0, float e1, float x) { float t = s_saturate((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); }
+	inline float2 smoothstep(float2 e0, float2 e1, float2 x) { return x; }
+	inline float3 smoothstep(float3 e0, float3 e1, float3 x) { return x; }
+	inline float4 smoothstep(float4 e0, float4 e1, float4 x) { return x; }
+	inline float2 smoothstep(float e0, float e1, float2 x) { return x; }
+	inline float3 smoothstep(float e0, float e1, float3 x) { return x; }
+	inline float4 smoothstep(float e0, float e1, float4 x) { return x; }
+	inline float fma(float a, float b, float c) { return a * b + c; }
+	inline float2 fma(float2 a, float2 b, float2 c) { return a * b + c; }
+	inline float3 fma(float3 a, float3 b, float3 c) { return a * b + c; }
+	inline float4 fma(float4 a, float4 b, float4 c) { return a * b + c; }
+
+	inline float dot(float2 a, float2 b) { return a.x * b.x + a.y * b.y; }
+	inline float dot(float3 a, float3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+	inline float dot(float4 a, float4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+	inline float length(float x) { return std::fabs(x); }
+	inline float length(float2 v) { return std::sqrt(dot(v, v)); }
+	inline float length(float3 v) { return std::sqrt(dot(v, v)); }
+	inline float length(float4 v) { return std::sqrt(dot(v, v)); }
+	inline float distance(float a, float b) { return std::fabs(a - b); }
+	inline float distance(float2 a, float2 b) { return length(a - b); }
+	inline float distance(float3 a, float3 b) { return length(a - b); }
+	inline float distance(float4 a, float4 b) { return length(a - b); }
+	inline float3 cross(float3 a, float3 b) { return a; }
+	inline float2 reflect(float2 i, float2 n) { return i; }
+	inline float3 reflect(float3 i, float3 n) { return i; }
+	inline float3 refract(float3 i, float3 n, float eta) { return i; }
+
+	inline bool isnan(float x) { return std::isnan(x); }
+	inline bool isinf(float x) { return std::isinf(x); }
+	inline bool any(bool2 v) { return v.x || v.y; }
+	inline bool any(bool3 v) { return v.x || v.y || v.z; }
+	inline bool any(bool4 v) { return v.x || v.y || v.z || v.w; }
+	inline bool all(bool2 v) { return v.x && v.y; }
+	inline bool all(bool3 v) { return v.x && v.y && v.z; }
+	inline bool all(bool4 v) { return v.x && v.y && v.z && v.w; }
+	template<class V, class B> inline V select(V a, V b, B c) { return a; }
+	template<class T, class F> inline T as_type(F x) { T r; __builtin_memcpy(&r, &x, sizeof(T) < sizeof(F) ? sizeof(T) : sizeof(F)); return r; }
+	inline float modf(float x, thread float& ip) { ip = std::trunc(x); return x - ip; }
+}

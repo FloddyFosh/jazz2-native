@@ -27,6 +27,7 @@
 #endif
 
 #include <cmath>
+#include <cstdlib>
 
 #include <Containers/StringConcatenable.h>
 #include <Containers/StringStlView.h>
@@ -154,7 +155,7 @@ namespace Jazz2
 
 	StringView ContentResolver::GetContentPath() const
 	{
-#if defined(DEATH_TARGET_UNIX) || defined(DEATH_TARGET_WINDOWS_RT)
+#if defined(DEATH_TARGET_UNIX) || defined(DEATH_TARGET_IOS) || defined(DEATH_TARGET_WINDOWS_RT)
 		return _contentPath;
 #elif defined(DEATH_TARGET_ANDROID)
 		return "assets:/"_s;
@@ -355,6 +356,18 @@ namespace Jazz2
 			_sourcePath = fs::CombinePath(dataPath, "Source/"_s);
 			_cachePath = fs::CombinePath(dataPath, "Cache/"_s);
 		}
+#elif defined(DEATH_TARGET_IOS)
+		// The application bundle is flat (no "Contents/Resources" as on macOS), so the content the build copied into
+		// it sits next to the executable. The original game files go to the app's "Documents" directory, the one
+		// place the user can reach: the Info.plist exposes it in the Files app (and in Finder/iTunes) through
+		// UIFileSharingEnabled, so "Source" is where the files are copied to, and the log is written next to it (see
+		// PreferencesCache). The cache is regenerable and large, so it goes to "Library/Caches", which iCloud backups
+		// skip and the system may purge under storage pressure - it is rebuilt on the next start then.
+		String executablePath = fs::GetExecutablePath();
+		_contentPath = fs::CombinePath(fs::GetDirectoryName(executablePath), "Content/"_s);
+		StringView home = ::getenv("HOME");
+		_sourcePath = fs::CombinePath({ home, "Documents"_s, "Source/"_s });
+		_cachePath = fs::CombinePath({ home, "Library/Caches"_s, "Cache/"_s });
 #elif defined(DEATH_TARGET_APPLE)
 		// Returns local application data directory on Apple
 		const String& appData = fs::GetSavePath("Jazz² Resurrection"_s);

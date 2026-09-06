@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -366,9 +369,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			Tinted_VkVs, Tinted_VkVsSize, Tinted_VkFs, Tinted_VkFsSize },
+			Tinted_VkVs, Tinted_VkVsSize, Tinted_VkFs, Tinted_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			Tinted_VsMsl, Tinted_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -390,9 +398,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			Tinted_USE_PALETTE_VkVs, Tinted_USE_PALETTE_VkVsSize, Tinted_USE_PALETTE_VkFs, Tinted_USE_PALETTE_VkFsSize },
+			Tinted_USE_PALETTE_VkVs, Tinted_USE_PALETTE_VkVsSize, Tinted_USE_PALETTE_VkFs, Tinted_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			Tinted_USE_PALETTE_VsMsl, Tinted_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 
@@ -782,9 +795,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedTinted_VkVs, BatchedTinted_VkVsSize, BatchedTinted_VkFs, BatchedTinted_VkFsSize },
+			BatchedTinted_VkVs, BatchedTinted_VkVsSize, BatchedTinted_VkFs, BatchedTinted_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedTinted_VsMsl, BatchedTinted_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 		{ "USE_PALETTE", "USE_PALETTE",
 #if defined(WITH_RHI_GL) && !defined(RHI_GL_PROFILE_ES2)
@@ -806,9 +824,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedTinted_USE_PALETTE_VkVs, BatchedTinted_USE_PALETTE_VkVsSize, BatchedTinted_USE_PALETTE_VkFs, BatchedTinted_USE_PALETTE_VkFsSize },
+			BatchedTinted_USE_PALETTE_VkVs, BatchedTinted_USE_PALETTE_VkVsSize, BatchedTinted_USE_PALETTE_VkFs, BatchedTinted_USE_PALETTE_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedTinted_USE_PALETTE_VsMsl, BatchedTinted_USE_PALETTE_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

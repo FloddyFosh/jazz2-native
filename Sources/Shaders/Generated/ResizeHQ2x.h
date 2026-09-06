@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -292,9 +295,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			ResizeHQ2x_VkVs, ResizeHQ2x_VkVsSize, ResizeHQ2x_VkFs, ResizeHQ2x_VkFsSize },
+			ResizeHQ2x_VkVs, ResizeHQ2x_VkVsSize, ResizeHQ2x_VkFs, ResizeHQ2x_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			ResizeHQ2x_VsMsl, ResizeHQ2x_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

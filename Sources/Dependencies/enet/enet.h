@@ -5304,7 +5304,8 @@ extern "C" {
 			tv->tv_nsec = t.QuadPart % 1000000 * 1000;
 			return (0);
 		}
-	#elif __APPLE__ && __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
+	#elif __APPLE__ && defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
+		/* (macOS only: the macro is undefined on iOS, where the SDK has always had clock_gettime) */
 		#define CLOCK_MONOTONIC 0
 
 		int clock_gettime(int X, struct timespec *ts) {

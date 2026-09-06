@@ -120,9 +120,9 @@ namespace nCine
 		static void OnRenderPlatformWindow(ImGuiViewport* viewport, void*);
 		static void OnSwapPlatformWindowBuffers(ImGuiViewport* viewport, void*);
 		void DrawPlatformWindow(ImGuiViewport* viewport);
-#elif defined(IMGUI_HAS_VIEWPORT) && defined(WITH_RHI_VULKAN) && (defined(WITH_SDL2) || defined(WITH_SDL3))
+#elif defined(IMGUI_HAS_VIEWPORT) && (defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)) && (defined(WITH_SDL2) || defined(WITH_SDL3))
 		// No swap-buffers hook here: every window is presented from the device's PresentFrame(), together with the
-		// main one, because they all share the frame's single command buffer and submit
+		// main one, because they all share the frame's single command buffer and submit (Vulkan and Metal alike)
 		void PrepareForViewports();
 		static void OnCreatePlatformWindow(ImGuiViewport* viewport);
 		static void OnDestroyPlatformWindow(ImGuiViewport* viewport);

@@ -119,6 +119,7 @@
     <ClCompile Include="GlslToCpp.cpp" />
     <ClCompile Include="Essl100.cpp" />
     <ClCompile Include="Hlsl.cpp" />
+    <ClCompile Include="Msl.cpp" />
     <ClCompile Include="Vulkan.cpp" />
     <ClCompile Include="GlslReflect.cpp" />
     <ClCompile Include="RuntimeShader.cpp" />
@@ -150,6 +151,7 @@
     <ClInclude Include="GlslToCpp.h" />
     <ClInclude Include="Essl100.h" />
     <ClInclude Include="Hlsl.h" />
+    <ClInclude Include="Msl.h" />
     <ClInclude Include="Vulkan.h" />
     <ClInclude Include="GlslReflect.h" />
     <ClInclude Include="RuntimeShader.h" />

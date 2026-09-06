@@ -74,6 +74,13 @@ namespace Death { namespace Environment {
 	 * @partialsupport Available only on @ref DEATH_TARGET_APPLE "Apple" platforms.
 	 */
 	Containers::String GetAppleVersion();
+
+	/**
+	 * @brief Returns the hardware model identifier of the Apple device running this application (e.g. `iPhone14,5`)
+	 *
+	 * @partialsupport Available only on @ref DEATH_TARGET_APPLE "Apple" platforms.
+	 */
+	Containers::String GetAppleDeviceModel();
 #endif
 
 #if defined(DEATH_TARGET_SWITCH) || defined(DOXYGEN_GENERATING_OUTPUT)

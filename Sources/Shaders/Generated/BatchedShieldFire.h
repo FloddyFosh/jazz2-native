@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -259,9 +262,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			BatchedShieldFire_VkVs, BatchedShieldFire_VkVsSize, BatchedShieldFire_VkFs, BatchedShieldFire_VkFsSize },
+			BatchedShieldFire_VkVs, BatchedShieldFire_VkVsSize, BatchedShieldFire_VkFs, BatchedShieldFire_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			BatchedShieldFire_VsMsl, BatchedShieldFire_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

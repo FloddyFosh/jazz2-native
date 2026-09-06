@@ -49,6 +49,8 @@ if(NOT CMAKE_GENERATOR_PLATFORM OR "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "${CMA
 		message(STATUS "Compiling for architecture: WASM (on ${CMAKE_SYSTEM_PROCESSOR} machine)")
 	elseif(NINTENDO_SWITCH)
 		message(STATUS "Compiling for architecture: ${CMAKE_SYSTEM_PROCESSOR} (Nintendo Switch)")
+	elseif(IOS)
+		message(STATUS "Compiling for architecture: ${CMAKE_OSX_ARCHITECTURES} (iOS, ${CMAKE_OSX_SYSROOT})")
 	elseif(APPLE AND CMAKE_OSX_ARCHITECTURES)
 		message(STATUS "Compiling for architecture: ${CMAKE_OSX_ARCHITECTURES} (on ${CMAKE_SYSTEM_PROCESSOR} machine)")
 	else()
@@ -76,6 +78,14 @@ endif()
 	
 include(ncine_options)
 include(ncine_get_version)
+
+if(NCINE_PREFERRED_RHI STREQUAL "Metal")
+	# For the Metal backend's one Objective-C++ file (the CAMetalLayer bridge). Enabled before any dependency
+	# subdirectory is added, and together with OBJC: enabling only OBJCXX later would claim SDL2's `.m` files as
+	# Objective-C++ in a directory that never loaded the language ("CMAKE_OBJCXX_COMPILE_OBJECT not set").
+	enable_language(OBJC OBJCXX)
+endif()
+
 include(ncine_imported_targets)
 include(ncine_imgui)
 include(ncine_tracy)
@@ -176,8 +186,11 @@ if(NCINE_BUILD_ASSET_PACKER)
 	set_target_properties(AssetPacker PROPERTIES FOLDER "Utilities")
 endif()
 
-# Windows RT uses custom packaging, enable it only for other platforms
-if(NOT WINDOWS_PHONE AND NOT WINDOWS_STORE AND NOT ANDROID AND NOT NCINE_BUILD_ANDROID AND NOT NINTENDO_SWITCH AND NOT NINTENDO_3DS AND NOT VITA AND NOT PLATFORM_PSP AND NOT PLATFORM_PS3 AND NOT NCINE_BUILD_LIBRETRO)
+# Windows RT uses custom packaging, enable it only for other platforms. iOS assembles its application bundle at
+# build time instead (see cmake/ncine_ios_bundle.cmake), there is nothing to install or package.
+if(IOS)
+	include(ncine_ios_bundle)
+elseif(NOT WINDOWS_PHONE AND NOT WINDOWS_STORE AND NOT ANDROID AND NOT NCINE_BUILD_ANDROID AND NOT NINTENDO_SWITCH AND NOT NINTENDO_3DS AND NOT VITA AND NOT PLATFORM_PSP AND NOT PLATFORM_PS3 AND NOT NCINE_BUILD_LIBRETRO)
 	include(ncine_installation)
 endif()
 include(ncine_strip_binaries)

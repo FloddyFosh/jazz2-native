@@ -88,6 +88,15 @@ namespace ShaderCompiler
 		String D3d11;
 		/** @brief Vulkan stage modules: the SPIR-V words */
 		String Vulkan;
+		/**
+			@brief Metal stage sources: the MSL text of both stages
+
+			Needs no compiler at all (the Metal backend compiles the text on the Mac at load time, there being
+			no MSL compiler outside Xcode), so this aggregate is rebuilt by every regeneration. It still lives
+			beside the other two rather than in the per-shader headers so the whole of a backend's shader text
+			stays out of every other backend's binary the same way.
+		*/
+		String Metal;
 	};
 
 	/** @brief One lowered program (document plus per-variant reflection) to be emitted into a generated header */

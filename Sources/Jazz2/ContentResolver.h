@@ -454,7 +454,7 @@ namespace Jazz2
 		/** @brief Drops the cached fonts whose atlas baked the palette, leaving the palette-indexed ones alone */
 		void DropBakedFonts();
 
-#if defined(DEATH_TARGET_UNIX) || defined(DEATH_TARGET_WINDOWS_RT)
+#if defined(DEATH_TARGET_UNIX) || defined(DEATH_TARGET_IOS) || defined(DEATH_TARGET_WINDOWS_RT)
 		String _contentPath;
 #endif
 #if defined(DEATH_TARGET_ANDROID) || defined(DEATH_TARGET_APPLE) || defined(DEATH_TARGET_UNIX) || defined(DEATH_TARGET_WINDOWS_RT)

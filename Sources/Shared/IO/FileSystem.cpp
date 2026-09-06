@@ -54,7 +54,9 @@
 #	endif
 #	if defined(DEATH_TARGET_APPLE)
 #		include <copyfile.h>
-#		include <objc/objc-runtime.h>
+		// The two headers <objc/objc-runtime.h> wraps on macOS, the iOS SDK only has these two
+#		include <objc/message.h>
+#		include <objc/runtime.h>
 #		include <mach-o/dyld.h>
 #	elif defined(DEATH_TARGET_EMSCRIPTEN)
 #		include <emscripten/emscripten.h>
@@ -2489,7 +2491,7 @@ namespace Death { namespace IO {
 	{
 		if (path.empty()) return false;
 
-#if defined(DEATH_TARGET_APPLE)
+#if defined(DEATH_TARGET_APPLE) && !defined(DEATH_TARGET_IOS)
 		Class nsStringClass = objc_getClass("NSString");
 		Class nsUrlClass = objc_getClass("NSURL");
 		Class nsFileManager = objc_getClass("NSFileManager");
@@ -3019,7 +3021,27 @@ namespace Death { namespace IO {
 
 	bool FileSystem::LaunchDirectoryAsync(StringView path)
 	{
-#if defined(DEATH_TARGET_APPLE)
+#if defined(DEATH_TARGET_IOS)
+		// No Finder, but the Files app opens a directory of the app's own "Documents" through its `shareddocuments://` URL scheme
+		if (!DirectoryExists(path)) {
+			return false;
+		}
+		Class nsStringClass = objc_getClass("NSString");
+		Class nsUrlClass = objc_getClass("NSURL");
+		Class uiApplicationClass = objc_getClass("UIApplication");
+		if (nsStringClass != nullptr && nsUrlClass != nullptr && uiApplicationClass != nullptr) {
+			String url = "shareddocuments://"_s + GetAbsolutePath(path);
+			id urlString = ((id(*)(Class, SEL, const char*))objc_msgSend)(nsStringClass, sel_getUid("stringWithUTF8String:"), url.data());
+			id nsUrl = ((id(*)(Class, SEL, id))objc_msgSend)(nsUrlClass, sel_getUid("URLWithString:"), urlString);
+			if (nsUrl == nullptr) {
+				return false;
+			}
+			id application = ((id(*)(Class, SEL))objc_msgSend)(uiApplicationClass, sel_getUid("sharedApplication"));
+			((void(*)(id, SEL, id, id, id))objc_msgSend)(application, sel_getUid("openURL:options:completionHandler:"), nsUrl, nullptr, nullptr);
+			return true;
+		}
+		return false;
+#elif defined(DEATH_TARGET_APPLE)
 		if (!DirectoryExists(path)) {
 			return false;
 		}

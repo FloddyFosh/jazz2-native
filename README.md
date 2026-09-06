@@ -73,6 +73,13 @@ Jazz² Resurrection is reimplementation of the game **Jazz Jackrabbit 2** releas
 
 Alternatively, you can install it using <sub><sub>[![Homebrew](https://img.shields.io/badge/brew-grey?logo=homebrew&logoColor=ffffff&label=Home&color=b56b2b)](https://formulae.brew.sh/cask/jazz2-resurrection)</sub></sub> `brew trust deathkiller/jazz2` and `brew install deathkiller/jazz2/jazz2`
 
+### iOS
+* The game is not on the App Store, build the application bundle from source (see [below](#ios-1)) and install it on the device from **Xcode**, or sideload the built `jazz2.app`
+* Copy contents of original *Jazz Jackrabbit 2* directory to `Jazz² Resurrection/Source/` in the **Files** app (under *On My iPhone* / *On My iPad*), or through file sharing in *Finder* (or *iTunes*)
+* Run the newly installed application
+
+*The game requires **iOS 14** (or newer) and runs on iPhone and iPad, in landscape orientation, with on-screen touch controls and game controllers. Cache is recreated during the intro cinematics on the first startup, so it can't be skipped. The log file* `Jazz2.log` *is written next to the* `Source` *directory.*
+
 ### Android
 * Download the game
 * Install `Jazz2.apk` or `Jazz2_x64.apk` on the device
@@ -250,6 +257,15 @@ This section contains only a brief explanation of the build process. For a more 
 * Build dependencies will be downloaded automatically by *CMake*
   * Can be disabled with `NCINE_DOWNLOAD_DEPENDENCIES` option, then download [build dependencies](https://github.com/deathkiller/jazz2-libraries/tree/macos) manually to `./Libs/`
 * Build the project with *CMake*
+
+### iOS
+* Install **Xcode** (the Command Line Tools alone have no iOS SDK) on a Mac
+* Build dependencies (SDL2, OpenAL Soft, Ogg/Vorbis and libcurl) will be downloaded and compiled from source automatically by *CMake*
+* Build the project with *CMake* for the `iOS` system, for example with the **Xcode** generator, which also signs and deploys the application to a device:
+```bash
+cmake -B build -G Xcode -D CMAKE_SYSTEM_NAME=iOS -D CMAKE_OSX_ARCHITECTURES=arm64 -D CMAKE_OSX_DEPLOYMENT_TARGET=14.0 -D NCINE_IOS_DEVELOPMENT_TEAM=<Apple Developer team ID>
+```
+* For the iOS Simulator, use `CMAKE_OSX_SYSROOT=iphonesimulator` with the Mac's own architecture instead, see [the documentation](https://de4th.dev/jazz2/docs/building.html) for details
 
 ### Android
 * Install Android SDK (preferably to `../android-sdk/`)

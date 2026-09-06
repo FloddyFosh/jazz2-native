@@ -107,7 +107,7 @@ namespace nCine::RHI::GL
 		// the OES spelling) and does not support shader binary caching, so this query is skipped there,
 		// NUM_PROGRAM_BINARY_FORMATS then stays 0 and the cache stays off.
 #if !defined(DEATH_TARGET_VITA)
-#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX)
+#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX) && !defined(DEATH_TARGET_IOS)
 		if (HasExtension(Extensions::OesGetProgramBinary)) {
 			glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS_OES, &_intValues[(std::int32_t)IntValues::NumProgramBinaryFormats]);
 			DEATH_ASSERT(_intValues[(std::int32_t)IntValues::NumProgramBinaryFormats] <= MaxProgramBinaryFormats);

@@ -21,6 +21,9 @@ namespace winrtWSP = winrt::Windows::System::Profile;
 #	include <cstdlib>
 #	include <cstring>
 #	include <unistd.h>
+#	if defined(DEATH_TARGET_APPLE)
+#		include <sys/sysctl.h>
+#	endif
 #endif
 
 #if defined(DEATH_TARGET_AMIGAOS)
@@ -110,6 +113,29 @@ namespace Death { namespace Environment {
 		::fclose(fp);
 
 		return result;
+	}
+
+	Containers::String GetAppleDeviceModel()
+	{
+#	if defined(DEATH_TARGET_IOS_SIMULATOR)
+		// The simulator answers the sysctl with the Mac's own CPU type, the simulated device is in the environment
+		const char* simulatorModel = std::getenv("SIMULATOR_MODEL_IDENTIFIER");
+		if (simulatorModel != nullptr && simulatorModel[0] != '\0') {
+			return Containers::String(simulatorModel);
+		}
+#	endif
+		// "hw.machine" is the device model on iOS ("iPhone14,5"), "hw.model" the one on macOS ("MacBookPro18,3")
+#	if defined(DEATH_TARGET_IOS)
+		const char* key = "hw.machine";
+#	else
+		const char* key = "hw.model";
+#	endif
+		char buffer[128];
+		std::size_t size = sizeof(buffer);
+		if (::sysctlbyname(key, buffer, &size, nullptr, 0) != 0 || size == 0) {
+			return {};
+		}
+		return Containers::String(buffer, ::strnlen(buffer, size));
 	}
 #endif
 

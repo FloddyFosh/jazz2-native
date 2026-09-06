@@ -84,7 +84,7 @@ const ENTRY_POINTS = [
 		name: 'fixed_function',
 		insert: 'void fixed_function() {\n\tpass ${1:p};\n\t${1:p}.color = ${2:COLOR};\n\tsubmit_quad(${1:p});\n}',
 		detail: 'void fixed_function([<target>[, <target>]]) { ... }',
-		doc: 'The console fixed-function implementation of the effect, transpiled to C++ by `--emit-fixed-function`. Never part of the GLSL stages.\n\nEmpty parentheses declare the generic block; `pvr` (Dreamcast), `gx` (Wii/GameCube), `gu` (PlayStation Portable), `gs` (PlayStation 2) and `rdp` (Nintendo 64) override it for one backend, and a comma-separated target list (`void fixed_function(pvr, gu, gs, rdp)`) declares one implementation shared by several. Every target belongs to exactly one block per file.'
+		doc: 'The console fixed-function implementation of the effect, transpiled to C++ by `--emit-fixed-function`. Never part of the GLSL stages.\n\nEmpty parentheses declare the generic block; `pvr` (Dreamcast), `gx` (Wii/GameCube), `pica` (Nintendo 3DS), `gu` (PlayStation Portable), `gs` (PlayStation 2), `rdp` (Nintendo 64) and `legacygl` (OpenGL 1.x) override it for one backend, and a comma-separated target list (`void fixed_function(pvr, gu, gs, rdp)`) declares one implementation shared by several. Every target belongs to exactly one block per file.'
 	}
 ];
 
@@ -135,6 +135,10 @@ const FIXED_FUNCTION_TARGETS = [
 		doc: 'The Wii / GameCube GX only.\n\nThe richest fixed-function tier here: the multi-stage programmable TEV expresses **every** `p.tev` preset, including the GX-only `LUMA_RAMP`. Strip-builder capacity 16 vertices.'
 	},
 	{
+		name: 'pica',
+		doc: 'The Nintendo 3DS\' PICA200 (via citro3d) only.\n\nIts six texture-combiner stages were modelled on OpenGL 1.3\'s `GL_COMBINE`: `GPU_INTERPOLATE` is the lerp `TINT_MIX` needs and the per-stage scale register (`GPU_TEVSCALE_1/2/4`) gives it both `MODULATE_X2` and `MODULATE_X4`, so `LUMA_RAMP` is the only preset it cannot express. Strip-builder capacity 16 vertices.'
+	},
+	{
 		name: 'gu',
 		doc: 'The PlayStation Portable\'s Graphics Engine (sceGu) only.\n\nIts five texture functions (modulate / decal / blend / replace / add) have no combiner output scale and no lerp of a texel toward a constant weighted by an interpolated alpha (`GU_TFX_BLEND` weighs by the *texel*), so `MODULATE_X2`, `MODULATE_X4`, `TINT_MIX` and `LUMA_RAMP` are all rejected for any block that reaches it. Express a boost as extra passes instead. Strip-builder capacity 16 vertices.'
 	},
@@ -178,7 +182,8 @@ const STAGE_MACROS = [
 	{ name: 'VERTEX_STAGE', doc: 'Kept for the vertex stage, dropped for the fragment stage. Resolved during stage assembly — `#define` and `#undef` are errors.' + CONVENTION },
 	{ name: 'FRAGMENT_STAGE', doc: 'Kept for the fragment stage, dropped for the vertex stage. Resolved during stage assembly — `#define` and `#undef` are errors.' + CONVENTION },
 	{ name: 'SOFTWARE_RENDERER', doc: 'Resolved when a stage source is built. Only `--emit-sw-generated` builds with the macro defined; every other emission takes the undefined side.' + CONVENTION },
-	{ name: 'NO_DYNAMIC_BRANCHING', doc: 'Resolved when a stage source is built. Only `--emit-rsx` (PlayStation 3) builds with the macro defined — a fragment stage compiling to NV40 `IF`/`LOOP`/`BRK` control flow does not survive cgcomp, so gate any dynamically branching block on it.' + CONVENTION }
+	{ name: 'NO_DYNAMIC_BRANCHING', doc: 'Resolved when a stage source is built. Only `--emit-rsx` (PlayStation 3) builds with the macro defined — a fragment stage compiling to NV40 `IF`/`LOOP`/`BRK` control flow does not survive cgcomp, so gate any dynamically branching block on it.' + CONVENTION },
+	{ name: 'LOW_POWER_GPU', doc: 'Resolved when a stage source is built. Only `--emit-cg` (PS Vita, sceGxm) builds with the macro defined. Unlike the other two it says nothing about what the target *can* compile — the SGX543 runs every shader as written — only about how much per-pixel work it can sustain, so gate a cheaper approximation of an expensive path (a nine-tap voronoi of `sin()`-based hashes, say) on it rather than dropping the feature for everyone.' + CONVENTION }
 ];
 
 // Which console can express which `p.tev` preset, rendered into the `tev` hover so the whole picture
@@ -187,14 +192,14 @@ const STAGE_MACROS = [
 // "ignored" is the one silent case, and it is why the presets it ignores are still rejected for a
 // block shared with a backend that would error on them.
 const TEV_SUPPORT_TABLE = 'Support is **per backend**, and a block is validated against the intersection of its targets:\n\n' +
-	'| preset | `pvr` | `gx` | `gu` | `gs` | `rdp` | `legacygl` |\n' +
-	'| --- | --- | --- | --- | --- | --- | --- |\n' +
-	'| `MODULATE` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |\n' +
-	'| `SILHOUETTE` | *ignored* | ✓ | ✓ | ✓ | ✓ | ✓ |\n' +
-	'| `MODULATE_X2` | *ignored* | ✓ | — | — | ✓ | ✓ |\n' +
-	'| `MODULATE_X4` | *ignored* | ✓ | — | — | — | ✓ |\n' +
-	'| `TINT_MIX` | — | ✓ | — | — | ✓ | ✓ |\n' +
-	'| `LUMA_RAMP` | — | ✓ | — | — | — | — |\n\n' +
+	'| preset | `pvr` | `gx` | `pica` | `gu` | `gs` | `rdp` | `legacygl` |\n' +
+	'| --- | --- | --- | --- | --- | --- | --- | --- |\n' +
+	'| `MODULATE` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |\n' +
+	'| `SILHOUETTE` | *ignored* | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |\n' +
+	'| `MODULATE_X2` | *ignored* | ✓ | ✓ | — | — | ✓ | ✓ |\n' +
+	'| `MODULATE_X4` | *ignored* | ✓ | ✓ | — | — | — | ✓ |\n' +
+	'| `TINT_MIX` | — | ✓ | ✓ | — | — | ✓ | ✓ |\n' +
+	'| `LUMA_RAMP` | — | ✓ | — | — | — | — | — |\n\n' +
 	'`—` is a **hard error** for every block that reaches that backend, the generic block included (it is ' +
 	'transpiled for all of them). *ignored* means the PVR has no `p.tev` at all and draws a plain modulated pass.';
 
@@ -256,27 +261,27 @@ const FIXED_FUNCTION = {
 	tevPresets: [
 		{
 			name: 'MODULATE',
-			doc: '`texture * vertex colour` — the default.\n\nEvery backend: `pvr`, `gx`, `gu`, `gs`, `rdp`, `legacygl`.'
+			doc: '`texture * vertex colour` — the default.\n\nEvery backend: `pvr`, `gx`, `pica`, `gu`, `gs`, `rdp`, `legacygl`.'
 		},
 		{
 			name: 'SILHOUETTE',
-			doc: 'The vertex colour wherever the texture has alpha — flat masks, shadows and glows.\n\n`gx`, `gu`, `gs`, `rdp`, `legacygl`. **The PVR has no `p.tev` at all** (it always modulates), so a `pvr` block silently draws a plain modulated pass instead; that is not an error, but a silhouette the PVR must honour has to come from `p.offset_color` or its own pass.'
+			doc: 'The vertex colour wherever the texture has alpha — flat masks, shadows and glows.\n\n`gx`, `pica`, `gu`, `gs`, `rdp`, `legacygl`. **The PVR has no `p.tev` at all** (it always modulates), so a `pvr` block silently draws a plain modulated pass instead; that is not an error, but a silhouette the PVR must honour has to come from `p.offset_color` or its own pass.'
 		},
 		{
 			name: 'MODULATE_X2',
-			doc: 'Modulate with the combiner\'s ×2 output scale.\n\n`gx` (native), `rdp` (its second combiner cycle doubles the first — `(1 - 0) * COMBINED + COMBINED`), `legacygl` (`GL_RGB_SCALE`). Ignored by the PVR.\n\n**Rejected** for any block that reaches `gu` or `gs` — neither texture environment has a scale stage — *including the generic block*, which is transpiled for every backend. Express the boost as an extra additive pass there, the way Colorized splits its multiplier.'
+			doc: 'Modulate with the combiner\'s ×2 output scale.\n\n`gx` (native), `pica` (`GPU_TEVSCALE_2`), `rdp` (its second combiner cycle doubles the first — `(1 - 0) * COMBINED + COMBINED`), `legacygl` (`GL_RGB_SCALE`). Ignored by the PVR.\n\n**Rejected** for any block that reaches `gu` or `gs` — neither texture environment has a scale stage — *including the generic block*, which is transpiled for every backend. Express the boost as an extra additive pass there, the way Colorized splits its multiplier.'
 		},
 		{
 			name: 'MODULATE_X4',
-			doc: 'Modulate with the combiner\'s ×4 output scale.\n\n`gx` and `legacygl` (`GL_RGB_SCALE` takes 1, 2 or 4) only. Ignored by the PVR.\n\n**Rejected** for any block that reaches `gu`, `gs` or `rdp` — the RDP reaches a ×2 with its two combiner cycles but a ×4 would need a third one the hardware does not have — and for the generic block.'
+			doc: 'Modulate with the combiner\'s ×4 output scale.\n\n`gx`, `pica` (`GPU_TEVSCALE_4`) and `legacygl` (`GL_RGB_SCALE` takes 1, 2 or 4) only. Ignored by the PVR.\n\n**Rejected** for any block that reaches `gu`, `gs` or `rdp` — the RDP reaches a ×2 with its two combiner cycles but a ×4 would need a third one the hardware does not have — and for the generic block.'
 		},
 		{
 			name: 'TINT_MIX',
-			doc: '`mix(texel, colour, alpha)` with an opaque result — the texel lerped toward the pass colour by the pass alpha. With a shaded strip both terms come from the per-vertex colour, which is how the TexturedBackground warp folds its horizon tint into the band\'s own draw instead of laying a second gradient pass over it.\n\nNeeds a **lerping combiner**, so only `gx` (one TEV stage, `d + mix(a, b, c)`), `rdp` (`(PRIM - TEX) * PRIM_ALPHA + TEX`) and `legacygl` (`GL_INTERPOLATE`) — a block naming any of them, or several of them, may use it.\n\n**Rejected** for any block that reaches `pvr`, `gu` or `gs`, and for the generic block. Give those backends their own block.'
+			doc: '`mix(texel, colour, alpha)` with an opaque result — the texel lerped toward the pass colour by the pass alpha. With a shaded strip both terms come from the per-vertex colour, which is how the TexturedBackground warp folds its horizon tint into the band\'s own draw instead of laying a second gradient pass over it.\n\nNeeds a **lerping combiner**, so only `gx` (one TEV stage, `d + mix(a, b, c)`), `pica` (`GPU_INTERPOLATE`), `rdp` (`(PRIM - TEX) * PRIM_ALPHA + TEX`) and `legacygl` (`GL_INTERPOLATE`) — a block naming any of them, or several of them, may use it.\n\n**Rejected** for any block that reaches `pvr`, `gu` or `gs`, and for the generic block. Give those backends their own block.'
 		},
 		{
 			name: 'LUMA_RAMP',
-			doc: 'A silhouette whose tone is picked per texel from a two-endpoint ramp instead of being flat: the texel\'s Rec.601 luminance amplified by `p.luma_gain` and saturated gives `grey`, and the colour is `mix(p.color.rgb, p.offset_color, grey)` — so `p.color` carries the tone at `grey = 0` and `p.offset_color` the tone at `grey = 1`. Coverage stays the silhouette\'s `texel alpha * p.color.a`. This is FrozenMask\'s ice.\n\n**`fixed_function(gx)` only.** It needs the GX\'s multi-stage programmable TEV (channel swizzles through the swap tables plus a KONST-weighted dot product), so it is rejected in a block targeting anything else, in a target list that names `gx` **and** another backend (the intersection cannot include it), and in the generic block. No other tier here can even derive a per-texel luminance: the CLX2 only modulates and adds, the GE and the GS have fixed texture functions, and the RDP\'s combiner has no dot product.'
+			doc: 'A silhouette whose tone is picked per texel from a two-endpoint ramp instead of being flat: the texel\'s Rec.601 luminance amplified by `p.luma_gain` and saturated gives `grey`, and the colour is `mix(p.color.rgb, p.offset_color, grey)` — so `p.color` carries the tone at `grey = 0` and `p.offset_color` the tone at `grey = 1`. Coverage stays the silhouette\'s `texel alpha * p.color.a`. This is FrozenMask\'s ice.\n\n**`fixed_function(gx)` only.** It needs the GX\'s multi-stage programmable TEV (channel swizzles through the swap tables plus a KONST-weighted dot product), so it is rejected in a block targeting anything else, in a target list that names `gx` **and** another backend (the intersection cannot include it), and in the generic block. No other tier here can even derive a per-texel luminance: the CLX2 only modulates and adds, the GE and the GS have fixed texture functions, the RDP\'s combiner has no dot product, and the transpiler holds the PICA200 to the same rule.'
 		}
 	],
 	pipelines: [
@@ -331,7 +336,7 @@ const STD140_PAD = ' In a `layout(std140)` block that means the next member star
 const GLSL_TYPES = [
 	{ name: 'void', doc: 'No value — a return type only. Every entry point is `void`.' },
 	{ name: 'bool', doc: 'Boolean. **4 bytes** in a std140 block (not 1), aligned to 4.' },
-	{ name: 'int', doc: 'Signed 32-bit integer. 4 bytes, aligned to 4.\n\nA `flat`/integer varying becomes `nointerpolation` on the HLSL path automatically.' },
+	{ name: 'int', doc: 'Signed 32-bit integer. 4 bytes, aligned to 4.\n\nA `flat`/integer varying becomes `nointerpolation` on the HLSL path and `[[flat]]` on the Metal path automatically.' },
 	{ name: 'uint', doc: 'Unsigned 32-bit integer. 4 bytes, aligned to 4.' + NO_UINT_ES2 },
 	{ name: 'float', doc: 'Single-precision float. 4 bytes, aligned to 4. `double` does not exist in this language.' },
 	{ name: 'vec2', doc: 'Two floats. **8 bytes, aligned to 8** — the one vector smaller than its alignment ceiling, so two of them pack into one 16-byte std140 slot.' },
@@ -355,7 +360,7 @@ const GLSL_TYPES = [
 	},
 	{
 		name: 'sampler3D',
-		doc: 'A 3D texture. Recognized by reflection and emitted as-is for GL, ES and Vulkan.\n\n**D3D11:** mapped onto `Texture2D` like `sampler2D` — the engine binds no real 3D texture, and the committed HLSL depends on that mapping. The Cg dialect (PS3 / Vita) does emit a real `sampler3D`.'
+		doc: 'A 3D texture. Recognized by reflection and emitted as-is for GL, ES and Vulkan.\n\n**D3D11:** mapped onto `Texture2D` like `sampler2D` — the engine binds no real 3D texture, and the committed HLSL depends on that mapping. The Cg dialect (PS3 / Vita) does emit a real `sampler3D`, and Metal a `texture3d<float>`.'
 	},
 	{
 		name: 'samplerCube',
@@ -410,7 +415,7 @@ const HLSL_SPELLINGS = {
 // The GL3.3, Vulkan/SPIR-V and legacy-GL paths emit the GLSL essentially as written, so they never
 // constrain a built-in and are not mentioned per entry.
 const SW_DECLINES = '\n\n**Software renderer:** outside the transpiler\'s builtin set, so `--emit-sw-generated` **declines** the whole shader (it silently gets no software path).';
-const HLSL_FAILS = '\n\n**D3D11 / PS3:** the HLSL emitter has no lowering for it — a hard `unknown function` error.';
+const HLSL_FAILS = '\n\n**D3D11 / PS3 / Metal:** neither the HLSL nor the MSL emitter has a lowering for it — a hard `unknown function` error.';
 const ES2_FAILS = '\n\n**ES2:** not in ESSL 1.00, and the lowering does not rewrite it, so it reaches the driver as-is and fails there.';
 const MATRIX_NOTE = '\n\nMatrices are outside the software transpiler\'s subset entirely.';
 
@@ -420,7 +425,7 @@ const GLSL_FUNCTIONS = [
 	{ name: 'all', detail: 'bool all(bvecN v)', doc: 'True when **every** component is true — the reduction over a comparison built-in.' + SW_DECLINES },
 	{ name: 'any', detail: 'bool any(bvecN v)', doc: 'True when **any** component is true — the reduction over a comparison built-in.' + SW_DECLINES },
 	{ name: 'asin', detail: 'genType asin(genType x)', doc: 'Arc sine, in radians. Undefined outside `[-1, 1]`.' },
-	{ name: 'atan', detail: 'genType atan(genType y_over_x) / atan(genType y, genType x)', doc: 'Arc tangent. The two-argument form takes the quadrant into account and is the one you want for an angle from a vector.\n\n**D3D11 / PS3:** the two-argument form lowers to `atan2`.' },
+	{ name: 'atan', detail: 'genType atan(genType y_over_x) / atan(genType y, genType x)', doc: 'Arc tangent. The two-argument form takes the quadrant into account and is the one you want for an angle from a vector.\n\n**D3D11 / PS3 / Metal:** the two-argument form lowers to `atan2`.' },
 	{ name: 'ceil', detail: 'genType ceil(genType x)', doc: 'Nearest integer >= x.' },
 	{ name: 'clamp', detail: 'genType clamp(genType x, min, max)', doc: 'Clamps to `[min, max]`; `min > max` is undefined. `min`/`max` may be scalars.' },
 	{ name: 'cos', detail: 'genType cos(genType angle)', doc: 'Cosine of an angle in radians.' },
@@ -430,43 +435,43 @@ const GLSL_FUNCTIONS = [
 	{
 		name: 'dFdx',
 		detail: 'genType dFdx(genType p)',
-		doc: 'Partial derivative of `p` in screen x — fragment stage only, and only meaningful because the GPU shades in 2×2 quads.\n\n**Software renderer:** supported but **approximated with a small constant** — the CPU path has no quad. Fine for widening an anti-aliasing edge (what FrozenMask uses it for), wrong for anything that needs a real gradient.\n\n**ES2:** the lowering prepends `#extension GL_OES_standard_derivatives : enable` for you; a device without that extension still fails at link time.\n\n**D3D11 / PS3:** lowers to `ddx`.'
+		doc: 'Partial derivative of `p` in screen x — fragment stage only, and only meaningful because the GPU shades in 2×2 quads.\n\n**Software renderer:** supported but **approximated with a small constant** — the CPU path has no quad. Fine for widening an anti-aliasing edge (what FrozenMask uses it for), wrong for anything that needs a real gradient.\n\n**ES2:** the lowering prepends `#extension GL_OES_standard_derivatives : enable` for you; a device without that extension still fails at link time.\n\n**D3D11 / PS3:** lowers to `ddx`. **Metal:** `dfdx`.'
 	},
 	{
 		name: 'dFdy',
 		detail: 'genType dFdy(genType p)',
-		doc: 'Partial derivative of `p` in screen y — fragment stage only. Same caveats as `dFdx`: approximated by a constant in software, needs `GL_OES_standard_derivatives` on ES2 (added for you), lowers to `ddy` for D3D11 and the PS3.'
+		doc: 'Partial derivative of `p` in screen y — fragment stage only. Same caveats as `dFdx`: approximated by a constant in software, needs `GL_OES_standard_derivatives` on ES2 (added for you), lowers to `ddy` for D3D11 and the PS3, `dfdy` for Metal.'
 	},
 	{ name: 'distance', detail: 'float distance(vecN a, vecN b)', doc: '`length(a - b)`.' },
 	{ name: 'dot', detail: 'float dot(vecN a, vecN b)', doc: 'Dot product.' },
-	{ name: 'equal', detail: 'bvecN equal(vecN a, vecN b)', doc: 'Component-wise `==`, yielding a bool vector — feed it to `all()`/`any()`.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `==` operator, which is component-wise in HLSL anyway.' },
+	{ name: 'equal', detail: 'bvecN equal(vecN a, vecN b)', doc: 'Component-wise `==`, yielding a bool vector — feed it to `all()`/`any()`.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `==` operator, which is component-wise in HLSL and MSL anyway (a plain vector `==` is a scalar in GLSL, so the MSL emitter wraps *that* one in `all()`).' },
 	{ name: 'exp', detail: 'genType exp(genType x)', doc: 'e raised to x.' + SW_DECLINES + ' The set has `exp2` but **not** `exp`, so write `exp2(x * 1.442695)` in a shader that must also render in software.' },
 	{ name: 'exp2', detail: 'genType exp2(genType x)', doc: '2 raised to x. Portable everywhere, unlike `exp`.' },
 	{ name: 'faceforward', detail: 'genType faceforward(genType N, genType I, genType Nref)', doc: '`N` flipped to face away from `I` — `dot(Nref, I) < 0 ? N : -N`.' + SW_DECLINES + HLSL_FAILS },
 	{ name: 'floor', detail: 'genType floor(genType x)', doc: 'Nearest integer <= x.' },
-	{ name: 'fract', detail: 'genType fract(genType x)', doc: '`x - floor(x)`.\n\n**D3D11 / PS3:** lowers to `frac`.' },
+	{ name: 'fract', detail: 'genType fract(genType x)', doc: '`x - floor(x)`.\n\n**D3D11 / PS3:** lowers to `frac`. **Metal:** keeps its name.' },
 	{
 		name: 'fwidth',
 		detail: 'genType fwidth(genType p)',
-		doc: '`abs(dFdx(p)) + abs(dFdy(p))` — the screen-space footprint of `p`, the usual width for an analytic anti-aliased edge.\n\nSame caveats as `dFdx`: **approximated by a constant** in the software renderer, needs `GL_OES_standard_derivatives` on ES2 (added for you), passthrough on D3D11 and the PS3.'
+		doc: '`abs(dFdx(p)) + abs(dFdy(p))` — the screen-space footprint of `p`, the usual width for an analytic anti-aliased edge.\n\nSame caveats as `dFdx`: **approximated by a constant** in the software renderer, needs `GL_OES_standard_derivatives` on ES2 (added for you), passthrough on D3D11, the PS3 and Metal.'
 	},
-	{ name: 'greaterThan', detail: 'bvecN greaterThan(vecN a, vecN b)', doc: 'Component-wise `>`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `>` operator.' },
-	{ name: 'greaterThanEqual', detail: 'bvecN greaterThanEqual(vecN a, vecN b)', doc: 'Component-wise `>=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `>=` operator.' },
+	{ name: 'greaterThan', detail: 'bvecN greaterThan(vecN a, vecN b)', doc: 'Component-wise `>`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `>` operator.' },
+	{ name: 'greaterThanEqual', detail: 'bvecN greaterThanEqual(vecN a, vecN b)', doc: 'Component-wise `>=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `>=` operator.' },
 	{ name: 'inverse', detail: 'matN inverse(matN m)', doc: 'Matrix inverse. GLSL 1.40+ — and expensive; prefer passing the inverse in as a uniform.' + SW_DECLINES + MATRIX_NOTE + HLSL_FAILS + ES2_FAILS },
-	{ name: 'inversesqrt', detail: 'genType inversesqrt(genType x)', doc: '`1 / sqrt(x)`.\n\n**D3D11 / PS3:** lowers to `rsqrt`.' },
+	{ name: 'inversesqrt', detail: 'genType inversesqrt(genType x)', doc: '`1 / sqrt(x)`.\n\n**D3D11 / PS3 / Metal:** lowers to `rsqrt`.' },
 	{ name: 'length', detail: 'float length(vecN v)', doc: 'Euclidean length.' },
-	{ name: 'lessThan', detail: 'bvecN lessThan(vecN a, vecN b)', doc: 'Component-wise `<`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `<` operator.' },
-	{ name: 'lessThanEqual', detail: 'bvecN lessThanEqual(vecN a, vecN b)', doc: 'Component-wise `<=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `<=` operator.' },
+	{ name: 'lessThan', detail: 'bvecN lessThan(vecN a, vecN b)', doc: 'Component-wise `<`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `<` operator.' },
+	{ name: 'lessThanEqual', detail: 'bvecN lessThanEqual(vecN a, vecN b)', doc: 'Component-wise `<=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `<=` operator.' },
 	{ name: 'log', detail: 'genType log(genType x)', doc: 'Natural logarithm.' + SW_DECLINES + ' The set has `log2` but **not** `log`, so write `log2(x) * 0.693147` in a shader that must also render in software.' },
 	{ name: 'log2', detail: 'genType log2(genType x)', doc: 'Base-2 logarithm. Portable everywhere, unlike `log`.' },
 	{ name: 'matrixCompMult', detail: 'matN matrixCompMult(matN a, matN b)', doc: 'Component-wise matrix product — **not** the linear-algebra one, which is plain `a * b`.' + SW_DECLINES + MATRIX_NOTE + HLSL_FAILS },
 	{ name: 'max', detail: 'genType max(genType x, y)', doc: 'Component-wise maximum; `y` may be a scalar.' },
 	{ name: 'min', detail: 'genType min(genType x, y)', doc: 'Component-wise minimum; `y` may be a scalar.' },
-	{ name: 'mix', detail: 'genType mix(genType a, genType b, genType|float t)', doc: 'Linear blend `a * (1 - t) + b * t`; `t` outside `[0, 1]` extrapolates.\n\n**D3D11 / PS3:** lowers to `lerp`.' },
-	{ name: 'mod', detail: 'genType mod(genType x, genType|float y)', doc: '`x - y * floor(x / y)` — the sign follows `y`, so it stays positive for a positive divisor (unlike C\'s `%`).\n\n**D3D11 / PS3:** expanded to that formula rather than `fmod`, which truncates toward zero and would differ for negative operands.\n\n**ES2:** the *float* `mod` is fine; the integer `%` operator is ES3-only and the lowering declines it.' },
+	{ name: 'mix', detail: 'genType mix(genType a, genType b, genType|float t)', doc: 'Linear blend `a * (1 - t) + b * t`; `t` outside `[0, 1]` extrapolates.\n\n**D3D11 / PS3:** lowers to `lerp`. **Metal:** keeps its name, except that a `bvec` selector becomes `select()`.' },
+	{ name: 'mod', detail: 'genType mod(genType x, genType|float y)', doc: '`x - y * floor(x / y)` — the sign follows `y`, so it stays positive for a positive divisor (unlike C\'s `%`).\n\n**D3D11 / PS3 / Metal:** expanded to that formula rather than `fmod`, which truncates toward zero and would differ for negative operands.\n\n**ES2:** the *float* `mod` is fine; the integer `%` operator is ES3-only and the lowering declines it.' },
 	{ name: 'normalize', detail: 'genType normalize(genType v)', doc: 'Scales to unit length; undefined for a zero vector.' },
-	{ name: 'not', detail: 'bvecN not(bvecN v)', doc: 'Component-wise logical negation of a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `!` operator.' },
-	{ name: 'notEqual', detail: 'bvecN notEqual(vecN a, vecN b)', doc: 'Component-wise `!=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3:** lowers to the `!=` operator.' },
+	{ name: 'not', detail: 'bvecN not(bvecN v)', doc: 'Component-wise logical negation of a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `!` operator.' },
+	{ name: 'notEqual', detail: 'bvecN notEqual(vecN a, vecN b)', doc: 'Component-wise `!=`, yielding a bool vector.' + SW_DECLINES + '\n\n**D3D11 / PS3 / Metal:** lowers to the `!=` operator (a plain vector `!=` becomes `any()` on Metal).' },
 	{ name: 'outerProduct', detail: 'matN outerProduct(vecN c, vecN r)', doc: 'Column vector times row vector. GLSL 1.20+.' + SW_DECLINES + MATRIX_NOTE + HLSL_FAILS + ES2_FAILS },
 	{ name: 'pow', detail: 'genType pow(genType x, genType y)', doc: 'x raised to y. Undefined for `x < 0`, and for `x == 0 && y <= 0`.' },
 	{ name: 'radians', detail: 'genType radians(genType degrees)', doc: 'Degrees to radians.' },
@@ -479,12 +484,12 @@ const GLSL_FUNCTIONS = [
 	{ name: 'sqrt', detail: 'genType sqrt(genType x)', doc: 'Square root; undefined for `x < 0`.' },
 	{ name: 'step', detail: 'genType step(genType|float edge, genType x)', doc: '0 when `x < edge`, else 1 — the branchless comparison, and the one to reach for under `NO_DYNAMIC_BRANCHING` (the PS3\'s RSX fragment path).' },
 	{ name: 'tan', detail: 'genType tan(genType angle)', doc: 'Tangent of an angle in radians.' },
-	{ name: 'texelFetch', detail: 'vec4 texelFetch(sampler2D s, ivec2 texel, int lod)', doc: 'Unfiltered read of one texel by integer coordinate, bypassing the sampler state. GLSL 1.30+ / ES 3.00+.\n\n**Software renderer:** explicitly banned.' + HLSL_FAILS + ES2_FAILS + '\n\nIn practice that leaves GL3.3 and Vulkan only — a shader using it needs a `#if` fallback for every other backend.' },
-	{ name: 'texture', detail: 'vec4 texture(sampler2D s, vec2 uv [, float bias])', doc: 'Filtered sample at the sampler\'s own mip level. In canvas mode write `texture(TEXTURE, UV)`.\n\nLowered per backend: `texture2D` on ES2, `s.Sample(s_sampler, uv)` for D3D11, `tex2D` for the PS3\'s Cg, and a runtime sampler call in software. The only texture built-in that is portable across all of them.' },
+	{ name: 'texelFetch', detail: 'vec4 texelFetch(sampler2D s, ivec2 texel, int lod)', doc: 'Unfiltered read of one texel by integer coordinate, bypassing the sampler state. GLSL 1.30+ / ES 3.00+.\n\n**Software renderer:** explicitly banned.' + HLSL_FAILS + ES2_FAILS + '\n\n**Metal:** lowers to `s.read(uint2(texel), lod)`.\n\nIn practice that leaves GL3.3, Vulkan and Metal — a shader using it needs a `#if` fallback for every other backend.' },
+	{ name: 'texture', detail: 'vec4 texture(sampler2D s, vec2 uv [, float bias])', doc: 'Filtered sample at the sampler\'s own mip level. In canvas mode write `texture(TEXTURE, UV)`.\n\nLowered per backend: `texture2D` on ES2, `s.Sample(s_sampler, uv)` for D3D11, `tex2D` for the PS3\'s Cg, `s.sample(s_smplr, uv)` for Metal, and a runtime sampler call in software. The only texture built-in that is portable across all of them.' },
 	{ name: 'textureGrad', detail: 'vec4 textureGrad(sampler2D s, vec2 uv, vec2 dPdx, vec2 dPdy)', doc: 'Sample with explicit screen-space derivatives. GLSL 1.30+ / ES 3.00+.\n\n**Software renderer:** explicitly banned.' + HLSL_FAILS + ES2_FAILS },
-	{ name: 'textureLod', detail: 'vec4 textureLod(sampler2D s, vec2 uv, float lod)', doc: 'Sample at an explicit mip level.\n\n**Software renderer:** explicitly banned — use `texture` there.\n\n**ES2:** rewritten to `texture2DLod`, which ESSL 1.00 only guarantees in the *vertex* stage.\n\n**D3D11 / PS3:** `SampleLevel`, and `tex2Dlod(s, float4(uv, 0.0, lod))` for Cg.' },
+	{ name: 'textureLod', detail: 'vec4 textureLod(sampler2D s, vec2 uv, float lod)', doc: 'Sample at an explicit mip level.\n\n**Software renderer:** explicitly banned — use `texture` there.\n\n**ES2:** rewritten to `texture2DLod`, which ESSL 1.00 only guarantees in the *vertex* stage.\n\n**D3D11 / PS3:** `SampleLevel`, and `tex2Dlod(s, float4(uv, 0.0, lod))` for Cg. **Metal:** `s.sample(s_smplr, uv, level(lod))`.' },
 	{ name: 'textureProj', detail: 'vec4 textureProj(sampler2D s, vec3 uvq)', doc: 'Sample after dividing the coordinate by its last component.\n\n**Software renderer:** explicitly banned.' + HLSL_FAILS + '\n\n**ES2:** ESSL 1.00 spells it `texture2DProj` and the lowering does not rewrite it, so it fails in the driver.' },
-	{ name: 'textureSize', detail: 'ivec2 textureSize(sampler2D s, int lod)', doc: 'Dimensions of a mip level. GLSL 1.30+ / ES 3.00+.\n\n**Software renderer:** explicitly banned.' + HLSL_FAILS + ES2_FAILS + '\n\nPass the size in as a uniform instead — that is what the engine\'s own shaders do.' },
+	{ name: 'textureSize', detail: 'ivec2 textureSize(sampler2D s, int lod)', doc: 'Dimensions of a mip level. GLSL 1.30+ / ES 3.00+.\n\n**Software renderer:** explicitly banned.\n\n**D3D11 / PS3:** the HLSL emitter has no lowering for it — a hard `unknown function` error. **Metal:** lowers to `int2(s.get_width(lod), s.get_height(lod))`.' + ES2_FAILS + '\n\nPass the size in as a uniform instead — that is what the engine\'s own shaders do.' },
 	{ name: 'transpose', detail: 'matN transpose(matN m)', doc: 'Matrix transpose. GLSL 1.20+.' + SW_DECLINES + MATRIX_NOTE + ES2_FAILS },
 	{ name: 'trunc', detail: 'genType trunc(genType x)', doc: 'Truncation toward zero. GLSL 1.30+ / ES 3.00+.' + SW_DECLINES + ES2_FAILS + '\n\nUnlike `round()` the compiler does **not** catch this one for ES2 — it fails in the driver.' }
 ];

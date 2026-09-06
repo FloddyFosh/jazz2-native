@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>@NCINE_APP_NAME@</string>
+	<key>CFBundleExecutable</key>
+	<string>@NCINE_IOS_EXECUTABLE_NAME@</string>
+	<key>CFBundleIdentifier</key>
+	<string>@NCINE_IOS_BUNDLE_IDENTIFIER@</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>@NCINE_IOS_EXECUTABLE_NAME@</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@NCINE_VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@NCINE_VERSION@</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>@NCINE_IOS_PLATFORM_NAME@</string>
+	</array>
+	<key>MinimumOSVersion</key>
+	<string>@NCINE_IOS_MINIMUM_VERSION@</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.games</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2016-@NCINE_BUILD_YEAR@ @NCINE_APP_VENDOR@</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<!-- An empty launch-screen dictionary (iOS 14+) stands in for a storyboard: without any launch screen at all
+	     UIKit would run the app letterboxed at a legacy iPhone resolution instead of the full native one -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<!-- The game draws its own controls over the whole screen; no status bar, no iPad Split View -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- Exposes the app's "Documents" directory in the Files app (and in Finder/iTunes): that is where the
+	     original game files are copied to, see ContentResolver and the README -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<!-- Game controllers (through GameController.framework in SDL) and hardware keyboards/mice on iPad -->
+	<key>GCSupportsControllerUserInteraction</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<!-- iOS 14+ asks the user before an app talks to the local network, which the LAN multiplayer does -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Used to find and play with other players on the local network.</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60</string>
+			</array>
+			<key>UIPrerenderedIcon</key>
+			<true/>
+		</dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60</string>
+				<string>AppIcon76x76</string>
+				<string>AppIcon83.5x83.5</string>
+			</array>
+			<key>UIPrerenderedIcon</key>
+			<true/>
+		</dict>
+	</dict>
+</dict>
+</plist>

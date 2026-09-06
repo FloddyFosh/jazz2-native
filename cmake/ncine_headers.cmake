@@ -254,6 +254,24 @@ elseif(NCINE_PREFERRED_RHI STREQUAL "Vulkan")
 		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Vulkan/VulkanUniformCache.h
 		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Vulkan/VulkanVertexFormat.h
 	)
+elseif(NCINE_PREFERRED_RHI STREQUAL "Metal")
+	# Metal rendering backend
+	list(APPEND HEADERS
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalBufferObject.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalCommon.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalDebug.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalDevice.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalLayerBridge.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalRenderTarget.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalRhiCapabilities.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShader.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShaderProgram.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShaderTypes.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShaderUniforms.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalTexture.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalUniformCache.h
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalVertexFormat.h
+	)
 else()
 	# OpenGL/WebGL is the default rendering backend
 	list(APPEND HEADERS

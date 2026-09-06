@@ -18,7 +18,9 @@ option(NCINE_DOWNLOAD_DEPENDENCIES "Download all build dependencies" ON)
 # The two PowerPC Amiga targets join the list for a toolchain reason rather than a code-size one:
 # neither GCC can produce a usable LTO archive here, so CMake's own IPO probe fails - on MorphOS with
 # "-fno-fat-lto-objects are supported only with linker plugin", on AmigaOS 4 when it archives the probe
-cmake_dependent_option(NCINE_LINKTIME_OPTIMIZATION "Compile the game with link-time optimization when in release" ON "NOT NCINE_BUILD_ANDROID;NOT PLATFORM_DREAMCAST;NOT PLATFORM_N64;NOT PLATFORM_AMIGA;NOT PLATFORM_MORPHOS;NOT PLATFORM_AMIGAOS4" OFF)
+# iOS is excluded for a tooling reason as well: CMake's IPO probe builds its test project against the device SDK
+# whatever CMAKE_OSX_SYSROOT says, so it fails for every simulator build and would turn the option off anyway.
+cmake_dependent_option(NCINE_LINKTIME_OPTIMIZATION "Compile the game with link-time optimization when in release" ON "NOT NCINE_BUILD_ANDROID;NOT PLATFORM_DREAMCAST;NOT PLATFORM_N64;NOT PLATFORM_AMIGA;NOT PLATFORM_MORPHOS;NOT PLATFORM_AMIGAOS4;NOT IOS" OFF)
 if(NCINE_LINKTIME_OPTIMIZATION)
 	include(CheckIPOSupported)
 	check_ipo_supported(RESULT _ipoSupported OUTPUT _ipoOutput)
@@ -100,13 +102,19 @@ if(NOT NCINE_BUILD_ANDROID AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE AND NOT N
 	# Only platforms that take their window from a library get to choose which one; the rest have exactly
 	# one backend, named above, and no fallback to offer
 	if(NOT NCINE_NATIVE_WINDOW_BACKEND)
-		if(NINTENDO_SWITCH OR VITA OR PLATFORM_AMIGAOS4 OR PLATFORM_MORPHOS)
+		if(NINTENDO_SWITCH OR VITA OR PLATFORM_AMIGAOS4 OR PLATFORM_MORPHOS OR IOS)
 			set(_NCINE_DEFAULT_BACKEND "SDL2")
 		else()
 			set(_NCINE_DEFAULT_BACKEND "GLFW")
 		endif()
 		set(NCINE_PREFERRED_BACKEND ${_NCINE_DEFAULT_BACKEND} CACHE STRING "Specify preferred core backend")
 		set_property(CACHE NCINE_PREFERRED_BACKEND PROPERTY STRINGS "GLFW;SDL2;SDL3")
+	endif()
+
+	if(IOS AND NOT NCINE_PREFERRED_BACKEND STREQUAL "SDL2")
+		# SDL2 is the port's window, touch, game-controller and application-lifecycle layer (see
+		# Docs/Building.dox); GLFW has no iOS port, and the SDL3 fork of the backend has not been built there
+		message(FATAL_ERROR "Invalid NCINE_PREFERRED_BACKEND \"${NCINE_PREFERRED_BACKEND}\" for iOS (expected SDL2)")
 	endif()
 
 	if((PLATFORM_AMIGAOS4 OR PLATFORM_MORPHOS) AND NOT NCINE_PREFERRED_BACKEND STREQUAL "SDL2")
@@ -274,24 +282,43 @@ if(NOT NCINE_BUILD_ANDROID AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE AND NOT N
 			message(FATAL_ERROR "Invalid NCINE_PREFERRED_RHI \"${NCINE_PREFERRED_RHI}\" on PS Vita (expected GXM, OpenGL or Software)")
 		endif()
 	else()
-		# Rendering backend (RHI) selection. OpenGL is the default; the software (CPU), Direct3D 11, and Vulkan
-		# backends are mutually exclusive alternatives chosen through this single option. The non-OpenGL backends
-		# present through the SDL2 window (software via SDL_Renderer, D3D11 via a DXGI swap chain, Vulkan via a
-		# VkSwapchainKHR), so any of them forces the SDL2 window backend. Direct3D 11 requires Windows + MSVC;
-		# Vulkan is header-only (Khronos Vulkan-Headers via FetchContent) with a dynamic vulkan-1.dll loader (no
-		# Vulkan SDK). The rest of the build keys on this variable directly (NCINE_PREFERRED_RHI STREQUAL "...").
+		# Rendering backend (RHI) selection. OpenGL is the default; the software (CPU), Direct3D 11, Vulkan and
+		# Metal backends are mutually exclusive alternatives chosen through this single option. The non-OpenGL
+		# backends present through the SDL2 window (software via SDL_Renderer, D3D11 via a DXGI swap chain, Vulkan
+		# via a VkSwapchainKHR, Metal via the window's CAMetalLayer), so any of them forces the SDL2 window backend.
+		# Direct3D 11 requires Windows + MSVC; Vulkan is header-only (Khronos Vulkan-Headers via FetchContent) with
+		# a dynamically loaded runtime library (vulkan-1.dll on Windows, libvulkan.so on Linux, and on macOS the
+		# Vulkan SDK's loader over MoltenVK - the backend enables the portability extensions MoltenVK needs, but
+		# the loader has to be installed or shipped next to the executable); Metal is macOS-only and header-only
+		# too (Apple's metal-cpp via FetchContent), compiling the offline MSL sources on the device at load time.
+		# The rest of the build keys on this variable directly (NCINE_PREFERRED_RHI STREQUAL "...").
 		# "LegacyGL" is the fixed-function OpenGL 1.x backend. Its target is MorphOS' TinyGL (see the arm
 		# above); it is offered on the desktop because that is where it can be developed and looked at -
 		# a desktop GL runs the same 1.3 combiner pipeline, so what renders wrongly here renders wrongly
 		# there. It is not a sensible choice for an actual desktop build, where the OpenGL backend is
 		# better in every respect.
-		set(NCINE_PREFERRED_RHI "OpenGL" CACHE STRING "Rendering backend: OpenGL, LegacyGL, Software, D3D11, or Vulkan")
-		set_property(CACHE NCINE_PREFERRED_RHI PROPERTY STRINGS "OpenGL;LegacyGL;Software;D3D11;Vulkan")
+		#
+		# iOS (CMAKE_SYSTEM_NAME=iOS, which sets IOS): Metal is the platform's graphics API and the default there.
+		# "OpenGL" is the OpenGL|ES 3.0 profile over the system's OpenGLES framework - deprecated by Apple since
+		# iOS 12 but still present, and the one backend the iOS Simulator can run on a Mac without a Metal GPU.
+		# "Software" presents through SDL_Renderer like everywhere else. Vulkan (MoltenVK) and D3D11 are not
+		# offered: nothing on the platform provides them.
+		if(IOS)
+			set(_NCINE_DEFAULT_RHI "Metal")
+		else()
+			set(_NCINE_DEFAULT_RHI "OpenGL")
+		endif()
+		set(NCINE_PREFERRED_RHI "${_NCINE_DEFAULT_RHI}" CACHE STRING "Rendering backend: OpenGL, LegacyGL, Software, D3D11, Vulkan, or Metal")
+		set_property(CACHE NCINE_PREFERRED_RHI PROPERTY STRINGS "OpenGL;LegacyGL;Software;D3D11;Vulkan;Metal")
 
 		if(NCINE_PREFERRED_RHI STREQUAL "D3D11" AND NOT (WIN32 AND MSVC))
 			message(FATAL_ERROR "NCINE_PREFERRED_RHI=D3D11 requires Windows with the MSVC toolchain")
-		elseif(NOT NCINE_PREFERRED_RHI MATCHES "^(OpenGL|LegacyGL|Software|D3D11|Vulkan)$")
-			message(FATAL_ERROR "Invalid NCINE_PREFERRED_RHI \"${NCINE_PREFERRED_RHI}\" (expected OpenGL, LegacyGL, Software, D3D11, or Vulkan)")
+		elseif(NCINE_PREFERRED_RHI STREQUAL "Metal" AND NOT APPLE)
+			message(FATAL_ERROR "NCINE_PREFERRED_RHI=Metal requires macOS or iOS")
+		elseif(IOS AND NOT NCINE_PREFERRED_RHI MATCHES "^(Metal|OpenGL|Software)$")
+			message(FATAL_ERROR "Invalid NCINE_PREFERRED_RHI \"${NCINE_PREFERRED_RHI}\" on iOS (expected Metal, OpenGL or Software)")
+		elseif(NOT NCINE_PREFERRED_RHI MATCHES "^(OpenGL|LegacyGL|Software|D3D11|Vulkan|Metal)$")
+			message(FATAL_ERROR "Invalid NCINE_PREFERRED_RHI \"${NCINE_PREFERRED_RHI}\" (expected OpenGL, LegacyGL, Software, D3D11, Vulkan, or Metal)")
 		endif()
 
 		# The non-OpenGL backends present through the SDL window, so force an SDL window backend.
@@ -412,7 +439,7 @@ if(NCINE_PREFERRED_RHI STREQUAL "OpenGL")
 		if(EMSCRIPTEN)
 			# WebGL 2 is OpenGL|ES 3.0; WebGL 1 (ES2) is below what the pipeline needs from a browser
 			set(_NCINE_RHI_GL_PROFILE_DEFAULT "ES3")
-		elseif(ANDROID OR NCINE_BUILD_ANDROID OR NINTENDO_SWITCH OR NCINE_WITH_ANGLE)
+		elseif(ANDROID OR NCINE_BUILD_ANDROID OR NINTENDO_SWITCH OR IOS OR NCINE_WITH_ANGLE)
 			# GLES-only platforms, and ANGLE (which is an OpenGL|ES implementation on top of D3D/Vulkan)
 			set(_NCINE_RHI_GL_PROFILE_DEFAULT "ES3")
 		elseif(NCINE_ARM_PROCESSOR AND UNIX AND NOT APPLE)
@@ -429,8 +456,14 @@ if(NCINE_PREFERRED_RHI STREQUAL "OpenGL")
 		endif()
 
 		# The GLES-only platforms above have no desktop GL to fall back to
-		if(NCINE_RHI_GL_PROFILE STREQUAL "Core" AND (EMSCRIPTEN OR ANDROID OR NCINE_BUILD_ANDROID OR NINTENDO_SWITCH OR NCINE_WITH_ANGLE))
+		if(NCINE_RHI_GL_PROFILE STREQUAL "Core" AND (EMSCRIPTEN OR ANDROID OR NCINE_BUILD_ANDROID OR NINTENDO_SWITCH OR IOS OR NCINE_WITH_ANGLE))
 			message(FATAL_ERROR "NCINE_RHI_GL_PROFILE=Core is not available on this platform (no desktop OpenGL; use ES3 or ES2)")
+		endif()
+		if(IOS AND NCINE_RHI_GL_PROFILE STREQUAL "ES2")
+			# The ES2 profile resolves its vertex-array-object entry points through EGL (see GLVertexArrayObject.cpp),
+			# and iOS has no EGL - its contexts come from EAGL through SDL. Every iOS device that runs a supported
+			# iOS has an ES 3.0 GPU anyway.
+			message(FATAL_ERROR "NCINE_RHI_GL_PROFILE=ES2 is not available on iOS (use ES3)")
 		endif()
 	endif()
 endif()
@@ -465,7 +498,7 @@ if(PLATFORM_AMIGA)
 	set(NCINE_RHI_USE_FB16 ON)
 endif()
 
-cmake_dependent_option(NCINE_WITH_BACKWARD "Enable integration with Backward library for exception handling" ON "(APPLE OR LINUX OR (WIN32 AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE)) AND NOT EMSCRIPTEN AND NOT NCINE_BUILD_ANDROID AND NOT VITA" OFF)
+cmake_dependent_option(NCINE_WITH_BACKWARD "Enable integration with Backward library for exception handling" ON "(APPLE OR LINUX OR (WIN32 AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE)) AND NOT IOS AND NOT EMSCRIPTEN AND NOT NCINE_BUILD_ANDROID AND NOT VITA" OFF)
 #option(NCINE_WITH_LZ4 "Enable LZ4 compression support" OFF)
 #option(NCINE_WITH_ZSTD "Enable Zstd compression support" OFF)
 option(NCINE_WITH_WEBP "Enable WebP image file support" OFF)
@@ -567,7 +600,20 @@ if((PLATFORM_PSP OR PLATFORM_PS3) AND NCINE_WITH_OPENMPT)
 endif()
 
 set(NCINE_CONTENT_DIR "${CMAKE_SOURCE_DIR}/Content" CACHE PATH "Set path to the game data directory")
-cmake_dependent_option(NCINE_CREATE_CONTENT_SYMLINK "Create symbolic link to the game data directory in target directory" OFF "(APPLE OR LINUX OR (WIN32 AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE)) AND NOT EMSCRIPTEN AND NOT NCINE_BUILD_ANDROID AND NOT VITA" OFF)
+cmake_dependent_option(NCINE_CREATE_CONTENT_SYMLINK "Create symbolic link to the game data directory in target directory" OFF "(APPLE OR LINUX OR (WIN32 AND NOT WINDOWS_PHONE AND NOT WINDOWS_STORE)) AND NOT IOS AND NOT EMSCRIPTEN AND NOT NCINE_BUILD_ANDROID AND NOT VITA" OFF)
+
+# ── iOS ───────────────────────────────────────────────────────────────────────────────────────────────
+# Cross-compiled from a Mac with Xcode (`-DCMAKE_SYSTEM_NAME=iOS`, see Docs/Building.dox). The
+# bundle is assembled by cmake/ncine_ios_bundle.cmake; these decide how it is identified and signed. The
+# identifier defaults to the one the macOS bundle uses; a device build signed with a personal team has to use
+# an identifier that team's provisioning covers, which is what the option is for.
+if(IOS)
+	set(NCINE_IOS_BUNDLE_IDENTIFIER "${NCINE_REVERSE_DNS}" CACHE STRING "Bundle identifier of the iOS application")
+	set(NCINE_IOS_DEVELOPMENT_TEAM "" CACHE STRING "Apple Developer team ID used to sign the iOS application (empty: unsigned, simulator only)")
+	set(NCINE_IOS_CODESIGN_IDENTITY "" CACHE STRING "codesign identity for Ninja/Makefile device builds (e.g. \"Apple Development\"), Xcode signs on its own")
+	set(NCINE_IOS_PROVISIONING_PROFILE "" CACHE FILEPATH "Provisioning profile (.mobileprovision) embedded into Ninja/Makefile device builds")
+	mark_as_advanced(NCINE_IOS_CODESIGN_IDENTITY NCINE_IOS_PROVISIONING_PROFILE)
+endif()
 
 if(NCINE_WITH_RENDERDOC)
 	set(RENDERDOC_DIR "" CACHE PATH "Set path to RenderDoc directory")

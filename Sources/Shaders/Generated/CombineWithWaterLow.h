@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -287,9 +290,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			CombineWithWaterLow_VkVs, CombineWithWaterLow_VkVsSize, CombineWithWaterLow_VkFs, CombineWithWaterLow_VkFsSize },
+			CombineWithWaterLow_VkVs, CombineWithWaterLow_VkVsSize, CombineWithWaterLow_VkFs, CombineWithWaterLow_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			CombineWithWaterLow_VsMsl, CombineWithWaterLow_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

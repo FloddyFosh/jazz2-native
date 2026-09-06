@@ -42,7 +42,7 @@ namespace nCine
 		}
 
 		const RHI::IRhiCapabilities& caps = theServiceLocator().GetRhiCapabilities();
-#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX)
+#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX) && !defined(DEATH_TARGET_IOS)
 		const bool isSupported = caps.HasExtension(RHI::IRhiCapabilities::Extensions::ArbGetProgramBinary) ||
 								 caps.HasExtension(RHI::IRhiCapabilities::Extensions::OesGetProgramBinary);
 #	else
@@ -53,7 +53,8 @@ namespace nCine
 			return;
 		}
 
-#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX) && (!defined(DEATH_TARGET_WINDOWS_RT) || defined(WITH_ANGLE))
+#	if defined(RHI_GL_PROFILE_ES) && !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_UNIX) && !defined(DEATH_TARGET_IOS) && (!defined(DEATH_TARGET_WINDOWS_RT) || defined(WITH_ANGLE))
+		// (iOS is left out as well: Apple's OpenGL|ES headers have no OES_get_program_binary spelling, only the core one)
 		if (caps.HasExtension(RHI::IRhiCapabilities::Extensions::OesGetProgramBinary)) {
 			_glGetProgramBinary = glGetProgramBinaryOES;
 			_glProgramBinary = glProgramBinaryOES;

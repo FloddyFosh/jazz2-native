@@ -130,6 +130,16 @@ namespace ShaderCompiler
 		std::size_t VkVsSpirvSize;
 		const std::uint32_t* VkFsSpirv;
 		std::size_t VkFsSpirvSize;
+		// Metal (MSL) stage sources: the MslEmitter lowering of VsSource/FsSource - VSMain/FSMain entry points,
+		// the loose uniforms gathered into a "_Globals" struct at [[buffer(0)]], std140 blocks as
+		// `constant Block&` arguments at [[buffer(1..N)]] in reflection order, samplers as texture2d + sampler
+		// pairs at [[texture(j)]]/[[sampler(j)]], and the GL->Metal clip-space Y flip in the vertex epilogue.
+		// Consumed by the Metal backend, which compiles the text through MTLDevice::newLibrary() at load
+		// time (there is no MSL compiler outside Xcode, so the artifact is source, like the PS Vita's Cg);
+		// other backends ignore them. Null when the MSL lowering was not available (a construct outside the
+		// emitter's subset) or the shader is runtime-compiled.
+		const char* MslVsSource;
+		const char* MslFsSource;
 	};
 
 	// A shader program with all of its variants (Variants[0] is always the base variant, whose Name is "")

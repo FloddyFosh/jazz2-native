@@ -8,6 +8,9 @@
 #if defined(WITH_RHI_VULKAN)
 #	include "VulkanGeneratedShaders.h"
 #endif
+#if defined(WITH_RHI_METAL)
+#	include "MetalGeneratedShaders.h"
+#endif
 
 #ifndef DOXYGEN_GENERATING_OUTPUT
 namespace Jazz2::ShadersGen
@@ -181,9 +184,14 @@ void main() {
 			nullptr, 0, nullptr, 0,
 #endif
 #if defined(WITH_RHI_VULKAN)
-			TouchCircle_VkVs, TouchCircle_VkVsSize, TouchCircle_VkFs, TouchCircle_VkFsSize },
+			TouchCircle_VkVs, TouchCircle_VkVsSize, TouchCircle_VkFs, TouchCircle_VkFsSize,
 #else
-			nullptr, 0, nullptr, 0 },
+			nullptr, 0, nullptr, 0,
+#endif
+#if defined(WITH_RHI_METAL)
+			TouchCircle_VsMsl, TouchCircle_FsMsl },
+#else
+			nullptr, nullptr },
 #endif
 	};
 

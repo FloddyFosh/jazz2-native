@@ -1,6 +1,7 @@
 #include "Emit.h"
 #include "Essl100.h"
 #include "Hlsl.h"
+#include "Msl.h"
 #include "Vulkan.h"
 
 #include <utility>
@@ -278,6 +279,16 @@ namespace ShaderCompiler
 		std::size_t VkVsSpirvSize;
 		const std::uint32_t* VkFsSpirv;
 		std::size_t VkFsSpirvSize;
+		// Metal (MSL) stage sources: the MslEmitter lowering of VsSource/FsSource - VSMain/FSMain entry points,
+		// the loose uniforms gathered into a "_Globals" struct at [[buffer(0)]], std140 blocks as
+		// `constant Block&` arguments at [[buffer(1..N)]] in reflection order, samplers as texture2d + sampler
+		// pairs at [[texture(j)]]/[[sampler(j)]], and the GL->Metal clip-space Y flip in the vertex epilogue.
+		// Consumed by the Metal backend, which compiles the text through MTLDevice::newLibrary() at load
+		// time (there is no MSL compiler outside Xcode, so the artifact is source, like the PS Vita's Cg);
+		// other backends ignore them. Null when the MSL lowering was not available (a construct outside the
+		// emitter's subset) or the shader is runtime-compiled.
+		const char* MslVsSource;
+		const char* MslFsSource;
 	};
 
 	// A shader program with all of its variants (Variants[0] is always the base variant, whose Name is "")
@@ -331,6 +342,13 @@ namespace ShaderCompiler
 			String FsDxbc;
 		};
 
+		/** Per-variant Metal artifact symbol names: the MSL source strings */
+		struct MslSymbols
+		{
+			String VsSource;
+			String FsSource;
+		};
+
 		/** Emits one program (per-variant sources, reflection arrays, variant list and Program descriptor) into @p output */
 		bool EmitProgram(const ShaderDocument& document, const SmallVectorImpl<VariantReflection>& variants,
 			SpirvCompileFn& compileSpirv, DxbcCompileFn& compileDxbc, String& output,
@@ -343,6 +361,8 @@ namespace ShaderCompiler
 			SmallVector<HlslSymbols, 0> hlslSymbols;
 			// Per-variant embedded-SPIR-V symbol names + sizes (or "nullptr"/0 when no SPIR-V was emitted)
 			SmallVector<VkSpirvSymbols, 0> vkSymbols;
+			// Per-variant MSL source symbol names ("nullptr" when the MSL lowering declined the stage)
+			SmallVector<MslSymbols, 0> mslSymbols;
 
 			for (const VariantReflection& v : variants) {
 				// The unnamed base variant carries no infix ("Lighting_Vs"), named variants keep theirs ("Tinted_USE_PALETTE_Vs")
@@ -355,6 +375,7 @@ namespace ShaderCompiler
 				String hlslSources[2];
 				SmallVector<std::uint8_t, 0> hlslDxbc[2];
 				VkSpirvSymbols vk;
+				MslSymbols msl;
 
 				for (std::int32_t stage = 0; stage < 2; stage++) {
 					bool vertexStage = (stage == 0);
@@ -445,6 +466,25 @@ namespace ShaderCompiler
 							Death::format("{}", words.size()) + ";\n\n";
 						(vertexStage ? vk.VsSymbol : vk.FsSymbol) = std::move(sym);
 					}
+
+					// Metal (MSL) lowering of the same stage, into the Metal AGGREGATE. The Metal backend compiles
+					// the text on the device at load time, so the artifact is source and needs no compiler here;
+					// a decline still defines the symbol, as a null (the backend then skips the program's draws).
+					{
+						String sym = prefix + (vertexStage ? "_VsMsl" : "_FsMsl");
+						String mslSource;
+						Diagnostic mslDiag;
+						if (MslEmitter::Transform(source, vertexStage, r, mslSource, mslDiag) &&
+							!mslSource.contains(")__SHDR__\""_s)) {
+							artifacts.Metal += "\tinline constexpr char " + sym + "[] =\n";
+							artifacts.Metal += "R\"__SHDR__(";
+							artifacts.Metal += mslSource;
+							artifacts.Metal += ")__SHDR__\";\n\n";
+						} else {
+							artifacts.Metal += "\tinline constexpr const char* " + sym + " = nullptr;\n\n";
+						}
+						(vertexStage ? msl.VsSource : msl.FsSource) = std::move(sym);
+					}
 				}
 				// Direct3D 11 artifacts, all into the D3D11 AGGREGATE rather than here - D3DCompile is a
 				// Windows DLL entry point, so most machines that build this project cannot rebuild them and
@@ -477,6 +517,7 @@ namespace ShaderCompiler
 				}
 				hlslSymbols.push_back(std::move(hlsl));
 				vkSymbols.push_back(std::move(vk));
+				mslSymbols.push_back(std::move(msl));
 
 				if (!r.Uniforms.empty()) {
 					output += "\tinline constexpr ShaderCompiler::Uniform " + prefix + "_Uniforms[] = {\n";
@@ -563,9 +604,14 @@ namespace ShaderCompiler
 				output += "#endif\n";
 				output += "#if defined(WITH_RHI_VULKAN)\n";
 				output += "\t\t\t" + vkSymbols[variantIndex].VsSymbol + ", " + vkSymbols[variantIndex].VsSymbol + "Size, " +
-					vkSymbols[variantIndex].FsSymbol + ", " + vkSymbols[variantIndex].FsSymbol + "Size },\n";
+					vkSymbols[variantIndex].FsSymbol + ", " + vkSymbols[variantIndex].FsSymbol + "Size,\n";
 				output += "#else\n";
-				output += "\t\t\tnullptr, 0, nullptr, 0 },\n";
+				output += "\t\t\tnullptr, 0, nullptr, 0,\n";
+				output += "#endif\n";
+				output += "#if defined(WITH_RHI_METAL)\n";
+				output += "\t\t\t" + mslSymbols[variantIndex].VsSource + ", " + mslSymbols[variantIndex].FsSource + " },\n";
+				output += "#else\n";
+				output += "\t\t\tnullptr, nullptr },\n";
 				output += "#endif\n";
 				variantIndex++;
 			}
@@ -593,14 +639,17 @@ namespace ShaderCompiler
 		output += "#pragma once\n";
 		output += "\n";
 		output += "#include \"ShaderCompilerTypes.h\"\n";
-		// The two backends whose artifacts need a compiler this machine may not have live in their own
-		// aggregates, which this header only REFERENCES (see BackendArtifacts). Including them here rather
-		// than leaving it to the umbrella keeps a single generated header usable on its own.
+		// The backends whose artifacts live in their own aggregates (see BackendArtifacts) are only REFERENCED
+		// by this header. Including them here rather than leaving it to the umbrella keeps a single generated
+		// header usable on its own.
 		output += "#if defined(WITH_RHI_D3D11)\n";
 		output += "#	include \"D3d11GeneratedShaders.h\"\n";
 		output += "#endif\n";
 		output += "#if defined(WITH_RHI_VULKAN)\n";
 		output += "#	include \"VulkanGeneratedShaders.h\"\n";
+		output += "#endif\n";
+		output += "#if defined(WITH_RHI_METAL)\n";
+		output += "#	include \"MetalGeneratedShaders.h\"\n";
 		output += "#endif\n";
 		output += "\n";
 		// The generated shader data namespace carries no public API and is excluded from the API

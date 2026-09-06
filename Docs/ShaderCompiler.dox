@@ -14,7 +14,8 @@ performs GLSL declaration reflection **offline**, and emits self-contained C++ h
 sources and reflection data, so the runtime no longer needs `glGetActiveUniform` introspection or
 double compilation of batched shaders to size the std140 `InstancesBlock`. Beside that primary job
 it hosts every source-to-source lowering the non-GL backends need: an HLSL transform for
-Direct3D 11, a Vulkan GLSL transform with offline SPIR-V compilation, an ESSL 100 transform for the
+Direct3D 11, a Vulkan GLSL transform with offline SPIR-V compilation, a Metal Shading Language
+transform for the macOS Metal backend, an ESSL 100 transform for the
 OpenGL|ES 2.0 profile, a GLSL-to-C++ transpiler for the software renderer, and a fixed-function
 transpiler for the backends that have no fragment shaders at all @m_span{m-text m-dim} (PVR on
 Dreamcast, GX on Wii/GameCube, GU on PlayStation Portable, GS on PlayStation 2, RDP on Nintendo 64,
@@ -53,6 +54,7 @@ OpenGL 3.3, OpenGL\|ES 3.0, WebGL 2.0 | `VsSource` / `FsSource` of the per-shade
 OpenGL\|ES 2.0 profile (`NCINE_RHI_GL_PROFILE=ES2`) | `VsSource100` / `FsSource100` --- the ESSL 100 lowering baked into the same header | primary mode
 Direct3D 11 | `HlslVsSource` / `HlslFsSource` --- Shader Model 4/5 HLSL baked into the same header | primary mode
 Vulkan | `VkVsSpirv` / `VkFsSpirv` --- SPIR-V words compiled offline through `glslangValidator` | primary mode + glslang
+Metal (macOS) | `MslVsSource` / `MslFsSource` --- Metal Shading Language compiled on the device at load time (there is no MSL compiler outside Xcode) | primary mode
 Software renderer | @cpp "SwGeneratedShaders.h" @ce --- transpiled C++ fragment functions | `--emit-sw-generated`
 Dreamcast (PVR) | @cpp "PvrGeneratedEffects.h" @ce --- transpiled `fixed_function` effects | `--emit-fixed-function pvr`
 Wii / GameCube (GX) | @cpp "GxGeneratedEffects.h" @ce --- transpiled `fixed_function` effects | `--emit-fixed-function gx`
@@ -94,7 +96,7 @@ cmake --build build-shadercompiler
 
 @code{.sh}
 ShaderCompiler <input.shader> -o <output.h> [-n <namespace>] [--glslang <path>]
-ShaderCompiler <input.shader> --check | --essl100-check | --hlsl | --cg | --vulkan
+ShaderCompiler <input.shader> --check | --essl100-check | --hlsl | --cg | --vulkan | --msl
 ShaderCompiler --generate-all [--shaders-dir <dir>] [--out-dir <dir>] [--check] [--no-dxbc] [--glslang <path>]
 ShaderCompiler --emit-types <output.h>
 ShaderCompiler --emit-sw-generated <output.h> <input.shader ...>
@@ -122,6 +124,7 @@ Mode or option | Meaning
 `--hlsl` | HLSL (Shader Model 4/5) transform of every stage
 `--cg` | Cg transform of every stage, in the dialect the PS Vita's sceGxm backend compiles @m_span{m-text m-dim} (the same emitter as `--hlsl`, see @ref shader-compiler-cg "below") @m_endspan
 `--vulkan` | Vulkan GLSL (@cpp "#version 450" @ce) transform of every stage @m_span{m-text m-dim} (does not require glslang) @m_endspan
+`--msl` | Metal Shading Language transform of every stage @m_span{m-text m-dim} (the source the Metal backend compiles on the Mac) @m_endspan
 `--generate-all` | Regenerates **every** committed artifact from one enumeration of the shader directory, see @ref shader-compiler-workflow "below". Both directories are auto-detected; `--shaders-dir` and `--out-dir` override them, `--check` compares instead of writing, `--no-dxbc` and `--glslang` are forwarded to the header emission
 `--emit-types <output.h>` | Writes the shared reflection-types header and nothing else
 `--emit-sw-generated <output.h> <in ...>` | Transpiles the fragment stage of every variant of every input to C++ and writes the aggregate software-renderer header
@@ -136,7 +139,7 @@ Mode or option | Meaning
 
 The five dump switches **write nothing** --- they print to stdout and never touch the committed
 artifacts. They are not mutually exclusive, but they are ordered: when several are combined, the
-first of `--essl100-check`, `--hlsl`, `--cg`, `--vulkan`, `--check` wins and the others are silently
+first of `--essl100-check`, `--hlsl`, `--cg`, `--vulkan`, `--msl`, `--check` wins and the others are silently
 ignored. `--glslang` is ignored by every dump path.
 
 Diagnostics go to stderr in three shapes: @cpp "<file>:<line>: error: <message>" @ce for anything
@@ -296,8 +299,12 @@ Four macros are resolved by the tool and therefore never survive into any emitte
     builds with it defined: a fragment stage that compiles to NV40 `IF`/`LOOP`/`BRK` control flow does
     not survive that toolchain --- the branch body overwrites registers the surrounding code is still
     holding --- so a shader gates any dynamically branching block on it.
+-   `LOW_POWER_GPU` is resolved the same way, and only `--emit-cg` (the PS Vita's sceGxm dialect) builds
+    with it defined. It says nothing about what the SGX543 *can* compile --- it runs every shader as
+    written --- only about how much per-pixel work it can sustain, so a shader gates a cheaper
+    approximation of an expensive path on it rather than dropping the feature for everyone.
 
-All four work in @cpp #ifdef @ce / @cpp #ifndef @ce **and** in @cpp #if @ce / @cpp #elif @ce
+All five work in @cpp #ifdef @ce / @cpp #ifndef @ce **and** in @cpp #if @ce / @cpp #elif @ce
 expressions, which is what lets one directive replace a nest of them
 @m_span{m-text m-dim} (`#if !SOFTWARE_RENDERER && !NO_DYNAMIC_BRANCHING`) @m_endspan. Each family is
 folded by its own pass over the expression's top-level @cpp && @ce terms, so the two compose: a term

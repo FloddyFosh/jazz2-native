@@ -51,10 +51,10 @@ namespace nCine
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;		// Enable Docking
 #endif
 #if defined(IMGUI_HAS_VIEWPORT) && (defined(WITH_RHI_GL) || defined(WITH_RHI_D3D11) || \
-		(defined(WITH_RHI_VULKAN) && (defined(WITH_SDL2) || defined(WITH_SDL3))))
+		((defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)) && (defined(WITH_SDL2) || defined(WITH_SDL3))))
 		// Multi-viewport platform windows need the renderer to draw into a window of its own: the OpenGL backend
-		// renders with raw GL into per-window GL contexts, Direct3D 11 into a per-window swap chain, Vulkan into an
-		// off-screen target blitted into a per-window swap chain. The remaining backends have no such path, so the
+		// renders with raw GL into per-window GL contexts, Direct3D 11 into a per-window swap chain, Vulkan and Metal
+		// into an off-screen target presented into a per-window swap chain / layer. The remaining backends have no such path, so the
 		// feature is not offered there (a panel dragged out of the main window stays docked instead of opening an
 		// empty one).
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;		// Enable Multi-Viewport / Platform Windows
@@ -103,7 +103,7 @@ namespace nCine
 		}
 
 #if defined(IMGUI_HAS_VIEWPORT) && (defined(WITH_RHI_GL) || defined(WITH_RHI_D3D11) || \
-		(defined(WITH_RHI_VULKAN) && (defined(WITH_SDL2) || defined(WITH_SDL3))))
+		((defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)) && (defined(WITH_SDL2) || defined(WITH_SDL3))))
 		PrepareForViewports();
 #endif
 
@@ -876,8 +876,8 @@ namespace nCine
 		RHI::Device::EndSecondaryFrame();
 		RHI::Device::SetViewport(previousViewport);
 	}
-#elif defined(IMGUI_HAS_VIEWPORT) && defined(WITH_RHI_VULKAN) && (defined(WITH_SDL2) || defined(WITH_SDL3))
-	// The Vulkan multi-viewport path keeps everything it can inside the ordinary RHI: a platform window's contents
+#elif defined(IMGUI_HAS_VIEWPORT) && (defined(WITH_RHI_VULKAN) || defined(WITH_RHI_METAL)) && (defined(WITH_SDL2) || defined(WITH_SDL3))
+	// The Vulkan and Metal multi-viewport path keeps everything it can inside the ordinary RHI: a platform window's contents
 	// are rendered into an off-screen render target like any other pass (so the usual bottom-up rows, scissor
 	// mapping and pipeline caches apply), and only the presentation is backend business - the device blits that
 	// texture into the window's own swap chain and joins it into the frame's single submit and present.
@@ -923,8 +923,8 @@ namespace nCine
 		PlatformWindowData* data = new PlatformWindowData();
 		data->Vbo = std::make_unique<RHI::Buffer>(BufferTarget::Vertex);
 		data->Ibo = std::make_unique<RHI::Buffer>(BufferTarget::Index);
-		// The surface is created from the SDL window itself (SDL only allows that on a Vulkan window, which the
-		// platform backend creates because the RHI is Vulkan)
+		// The surface / layer is created from the SDL window itself (SDL only allows that on a Vulkan resp. Metal
+		// window, which the platform backend creates because the RHI is Vulkan resp. Metal)
 		data->Swapchain = RHI::Device::CreateSecondarySwapchain(ImGuiSdlInput::getPlatformWindowHandle(viewport),
 			std::int32_t(viewport->Size.x), std::int32_t(viewport->Size.y));
 		viewport->RendererUserData = data;

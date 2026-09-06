@@ -313,6 +313,11 @@ function messagesOf(findings) {
 	// A variant define is written bare in an #if; the compiler lowers it to #ifdef on the way out
 	var bareVariant = analysis.builtinChecks('program P;\nvariant DITHER;\nvoid vertex() {}\nvoid fragment() {\n#if DITHER && !SOFTWARE_RENDERER\n#endif\n}\n');
 	equal('#if DITHER && !SOFTWARE_RENDERER is fine', bareVariant.length, 0, messagesOf(bareVariant));
+	// The PS Vita's low-power macro is the third backend conditional: legal in a chain, illegal to define
+	var lowPower = analysis.builtinChecks('program P;\nvoid vertex() {}\nvoid fragment() {\n#if SOFTWARE_RENDERER\n#elif LOW_POWER_GPU\n#else\n#endif\n}\n');
+	equal('#elif LOW_POWER_GPU is fine', lowPower.length, 0, messagesOf(lowPower));
+	var defineLowPower = analysis.builtinChecks('program P;\n#define LOW_POWER_GPU\nvoid vertex() {}\nvoid fragment() {}\n');
+	contains('#define LOW_POWER_GPU reported', messagesOf(defineLowPower), 'cannot be defined or undefined');
 })();
 
 (function () {
@@ -429,7 +434,8 @@ function messagesOf(findings) {
 	// The render modes offered must be exactly the six the parser accepts
 	var modes = names(language.RENDER_MODES).sort().join(',');
 	equal('render mode set', modes, 'blend_add,blend_mix,blend_mul,blend_premul_alpha,blend_sub,unshaded');
-	equal('fixed function target set', names(language.FIXED_FUNCTION_TARGETS).sort().join(','), 'gs,gu,gx,legacygl,pvr,rdp');
+	equal('fixed function target set', names(language.FIXED_FUNCTION_TARGETS).sort().join(','), 'gs,gu,gx,legacygl,pica,pvr,rdp');
+	equal('compile-time macro set', names(language.STAGE_MACROS).sort().join(','), 'FRAGMENT_STAGE,LOW_POWER_GPU,NO_DYNAMIC_BRANCHING,SOFTWARE_RENDERER,VERTEX_STAGE');
 	equal('pass field set', names(language.FIXED_FUNCTION.passFields).sort().join(','),
 		'blend,color,luma_gain,offset_color,screen_offset,tev');
 	equal('blend mode set', names(language.FIXED_FUNCTION.blendModes).sort().join(','), 'ADD,ALPHA,MATERIAL,OPAQUE');

@@ -12,6 +12,12 @@
 #			include <GLES2/gl2.h>
 #			include <GLES2/gl2ext.h>
 #			include "Graphics/RHI/GL/GLEs2HeaderShims.h"
+#		elif defined(DEATH_TARGET_IOS)
+			// Apple ships the ES headers inside the OpenGLES framework rather than under the Khronos paths, and its
+			// glext.h declares only what iOS GPUs implement; see the shim for the few enums the engine still names
+#			include <OpenGLES/ES3/gl.h>
+#			include <OpenGLES/ES3/glext.h>
+#			include "Graphics/RHI/GL/GLEsAppleHeaderShims.h"
 #		else
 #			include <GLES3/gl3.h>
 #			include <GLES2/gl2ext.h>
@@ -43,7 +49,11 @@
 #	if !defined(AL_ALEXT_PROTOTYPES)
 #		define AL_ALEXT_PROTOTYPES
 #	endif
-#	if defined(DEATH_TARGET_APPLE)
+#	if defined(DEATH_TARGET_IOS)
+		// OpenAL Soft compiled from source (static, see cmake/ncine_ios_dependencies.cmake), with its own header layout
+#		include <AL/al.h>
+#		include <AL/alext.h>
+#	elif defined(DEATH_TARGET_APPLE)
 #		include <OpenAL/al.h>
 #	elif defined(DEATH_TARGET_EMSCRIPTEN)
 #		include <AL/al.h>
@@ -67,7 +77,12 @@
 #	if !defined(AL_ALEXT_PROTOTYPES)
 #		define AL_ALEXT_PROTOTYPES
 #	endif
-#	if defined(DEATH_TARGET_APPLE)
+#	if defined(DEATH_TARGET_IOS)
+#		include <AL/alc.h>
+#		include <AL/al.h>
+#		include <AL/alext.h>
+#		include <AL/efx.h>
+#	elif defined(DEATH_TARGET_APPLE)
 #		include <OpenAL/alc.h>
 #		include <OpenAL/al.h>
 #	elif defined(DEATH_TARGET_EMSCRIPTEN)

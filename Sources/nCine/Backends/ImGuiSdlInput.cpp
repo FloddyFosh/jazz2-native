@@ -1197,6 +1197,9 @@ namespace nCine::Backends
 #	if defined(WITH_RHI_VULKAN)
 		// The renderer creates a VkSurfaceKHR from this window, which SDL only allows on a Vulkan window
 		sdl_flags |= (useOpenGL ? SDL_WINDOW_OPENGL : SDL_WINDOW_VULKAN);
+#	elif defined(WITH_RHI_METAL)
+		// The renderer attaches a Metal view to this window, which SDL only allows on a Metal window
+		sdl_flags |= (useOpenGL ? SDL_WINDOW_OPENGL : SDL_WINDOW_METAL);
 #	else
 		sdl_flags |= (useOpenGL ? SDL_WINDOW_OPENGL : 0);
 #	endif

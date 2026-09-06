@@ -271,6 +271,19 @@ elseif(NCINE_PREFERRED_RHI STREQUAL "Vulkan")
 		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Vulkan/VulkanTexture.cpp
 		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Vulkan/VulkanUniformCache.cpp
 	)
+elseif(NCINE_PREFERRED_RHI STREQUAL "Metal")
+	# Metal rendering backend (macOS). MetalLayerBridge.mm is the backend's one Objective-C++ file: the
+	# CAMetalLayer operations metal-cpp does not wrap (OBJCXX is enabled for it in ncine_extra_sources.cmake)
+	list(APPEND SOURCES
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalBufferObject.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalDevice.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalLayerBridge.mm
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalRenderTarget.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShaderProgram.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalShaderUniforms.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalTexture.cpp
+		${NCINE_SOURCE_DIR}/nCine/Graphics/RHI/Metal/MetalUniformCache.cpp
+	)
 else()
 	# OpenGL/WebGL is the default rendering backend
 	list(APPEND SOURCES

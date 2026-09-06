@@ -59,6 +59,27 @@ if(NCINE_PREFERRED_RHI STREQUAL "Vulkan")
 	endif()
 endif()
 
+# Metal backend: fetch Apple's header-only metal-cpp (the C++ bindings of the Metal, Foundation and QuartzCore
+# frameworks), so the backend is plain C++ against the system frameworks - no Xcode project, no Objective-C
+# beyond the one small CAMetalLayer bridge. The macOS 12 / iOS 15 edition is the oldest that carries every API
+# the backend uses (swizzled texture views, unified-memory query) and runs on every macOS the game targets.
+if(NCINE_PREFERRED_RHI STREQUAL "Metal")
+	if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.14.0")
+		include(FetchContent)
+		message(STATUS "Downloading Apple metal-cpp for the Metal backend...")
+		FetchContent_Declare(
+			metal_cpp
+			DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+			URL "https://developer.apple.com/metal/cpp/files/metal-cpp_macOS12_iOS15.zip"
+		)
+		FetchContent_MakeAvailable(metal_cpp)
+		set(METAL_CPP_INCLUDE_DIR "${metal_cpp_SOURCE_DIR}" CACHE PATH "Path to Apple's metal-cpp headers" FORCE)
+		message(STATUS "Using metal-cpp: ${METAL_CPP_INCLUDE_DIR}")
+	else()
+		message(FATAL_ERROR "The Metal backend requires CMake 3.14.0 or newer to download metal-cpp")
+	endif()
+endif()
+
 if(WIN32)
 	set(EXTERNAL_MSVC_DIR "${NCINE_LIBS}/Windows/" CACHE PATH "Set the path to the MSVC libraries directory")
 	if(NOT IS_DIRECTORY ${EXTERNAL_MSVC_DIR})
@@ -512,7 +533,11 @@ elseif(WIN32)
 		set(LUA_FOUND 1)
 	endif()
 elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
-	if(APPLE)
+	if(IOS)
+		# No prebuilt frameworks for iOS - SDL2, OpenAL Soft, Ogg/Vorbis and libcurl are compiled from source
+		# as part of the build (each creates the same target a find module would), see the file itself
+		include(ncine_ios_dependencies)
+	elseif(APPLE)
 		set(CMAKE_FRAMEWORK_PATH ${NCINE_LIBS})
 		set(CMAKE_MACOSX_RPATH ON)
 
@@ -545,13 +570,15 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 	if(NCINE_ARM_PROCESSOR)
 		include(check_atomic)
 	endif()
-	if(NCINE_RHI_GL_PROFILE MATCHES "^ES" OR NINTENDO_SWITCH)
+	# iOS is left out: its OpenGL|ES is a system framework linked by name (see ncine_extra_sources.cmake), and
+	# there is no EGL for the module to pair it with
+	if((NCINE_RHI_GL_PROFILE MATCHES "^ES" AND NOT IOS) OR NINTENDO_SWITCH)
 		find_package(OpenGLES2)
 	endif()
 	# A windowing library is only of use where the window backend is one (see NCINE_NATIVE_WINDOW_BACKEND
 	# in ncine_options.cmake) - the consoles bring their own, and the dedicated server and the libretro core
 	# never open a window at all
-	if(NOT NCINE_NATIVE_WINDOW_BACKEND AND NOT DEDICATED_SERVER AND NOT NCINE_BUILD_LIBRETRO)
+	if(NOT NCINE_NATIVE_WINDOW_BACKEND AND NOT DEDICATED_SERVER AND NOT NCINE_BUILD_LIBRETRO AND NOT IOS)
 		# Look for both GLFW and SDL2 to make the fallback logic work
 		find_package(GLFW)
 		find_package(SDL2)
@@ -567,7 +594,8 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 		# already off on these two targets.
 		unset(CURL_LIBRARY CACHE)
 		unset(CURL_INCLUDE_DIR CACHE)
-	else()
+	elseif(NOT IOS)
+		# (iOS builds its own libcurl from source above, or has none when the online features are off)
 		find_package(CURL)
 	endif()
 
@@ -654,6 +682,13 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 					set(SDLAUDIO_FOUND 1)
 				endif()
 			endif()
+		elseif(IOS)
+			# OpenAL Soft compiled from source above (the platform's own OpenAL.framework is deprecated and lacks
+			# the ALC_SOFT extensions the backend uses); the target exists whenever the download is allowed
+			if(NOT TARGET OpenAL::OpenAL)
+				unset(OPENAL_INCLUDE_DIR CACHE)
+				unset(OPENAL_LIBRARY CACHE)
+			endif()
 		else()
 			find_package(OpenAL)
 
@@ -663,7 +698,7 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 			endif()
 		endif()
 
-		if(NCINE_WITH_VORBIS)
+		if(NCINE_WITH_VORBIS AND NOT TARGET Vorbis::Vorbisfile)
 			find_package(Vorbis)
 		endif()
 		if(NCINE_WITH_OPENMPT)
@@ -716,7 +751,7 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 			INTERFACE_LINK_LIBRARIES atomic)
 	endif()
 
-	if(NINTENDO_SWITCH OR PLATFORM_N64 OR NINTENDO_WII OR NINTENDO_GAMECUBE OR NINTENDO_3DS OR PLATFORM_DREAMCAST OR PLATFORM_PS2 OR PLATFORM_PSP OR VITA OR PLATFORM_AMIGAOS4 OR PLATFORM_MORPHOS)
+	if(NINTENDO_SWITCH OR PLATFORM_N64 OR NINTENDO_WII OR NINTENDO_GAMECUBE OR NINTENDO_3DS OR PLATFORM_DREAMCAST OR PLATFORM_PS2 OR PLATFORM_PSP OR VITA OR PLATFORM_AMIGAOS4 OR PLATFORM_MORPHOS OR IOS)
 		# These platforms support only static linking
 		set(LIBRARY_LINKAGE STATIC)
 	else()
@@ -808,7 +843,8 @@ elseif(NOT NCINE_BUILD_ANDROID) # GCC and LLVM
 			INTERFACE_INCLUDE_DIRECTORIES "${LUA_INCLUDE_DIR}")
 	endif()
 
-	if(APPLE)
+	if(APPLE AND NOT IOS)
+		# The prebuilt macOS frameworks, iOS links the static libraries built from source instead
 		function(split_extra_frameworks PREFIX LIBRARIES)
 			foreach(LIBRARY ${LIBRARIES})
 				string(REGEX MATCH "^-framework " FOUND ${LIBRARY})

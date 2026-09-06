@@ -893,7 +893,7 @@ namespace nCine
 
 	bool MainApplication::CanShowScreenKeyboard()
 	{
-#if defined(DEATH_TARGET_WINDOWS) || defined(DEATH_TARGET_3DS) || defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
+#if defined(DEATH_TARGET_WINDOWS) || defined(DEATH_TARGET_IOS) || defined(DEATH_TARGET_3DS) || defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
 		return true;
 #else
 		return false;
@@ -911,6 +911,10 @@ namespace nCine
 		// While the applet is actually up nothing in the game runs to ask; what can be observed is the request
 		// waiting for the end of the frame
 		return _swkbdPending;
+#elif defined(DEATH_TARGET_IOS)
+		// SDL tracks UIKit's keyboard through its view controller
+		SDL_Window* window = SdlGfxDevice::windowHandle();
+		return (window != nullptr && SDL_IsScreenKeyboardShown(window) == SDL_TRUE);
 #elif defined(DEATH_TARGET_WINDOWS)
 		HWND hwnd = ::FindWindowEx(NULL, NULL, L"IPTip_Main_Window", NULL);
 		return (hwnd != NULL && ::IsWindowVisible(hwnd));
@@ -921,7 +925,7 @@ namespace nCine
 
 	bool MainApplication::ToggleScreenKeyboard()
 	{
-#if defined(DEATH_TARGET_3DS) || defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
+#if defined(DEATH_TARGET_IOS) || defined(DEATH_TARGET_3DS) || defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
 		return (IsScreenKeyboardVisible() ? HideScreenKeyboard() : ShowScreenKeyboard());
 #elif defined(DEATH_TARGET_WINDOWS)
 		if (HideScreenKeyboard()) {
@@ -1110,6 +1114,13 @@ namespace nCine
 		}
 #	endif
 		return success;
+#elif defined(DEATH_TARGET_IOS)
+		// The overlay kind of keyboard (see Application.h): SDL raises UIKit's keyboard once text input starts and
+		// delivers what is typed as text-input events, so the seed text and the callback are not used
+		static_cast<void>(initialText);
+		static_cast<void>(onCompleted);
+		SDL_StartTextInput();
+		return true;
 #else
 		return false;
 #endif
@@ -1124,6 +1135,12 @@ namespace nCine
 		// Nothing is collected from a dialog shut down this way: the result reads as cancelled
 		_oskData.result = PSP_UTILITY_OSK_RESULT_CANCELLED;
 		return (sceUtilityOskShutdownStart() >= 0);
+#elif defined(DEATH_TARGET_IOS)
+		if (!SDL_IsTextInputActive()) {
+			return false;
+		}
+		SDL_StopTextInput();
+		return true;
 #elif defined(DEATH_TARGET_3DS)
 		// Only a keyboard that has not been run yet can be taken back; the applet itself is closed by the user
 		if (!_swkbdPending) {
@@ -1461,6 +1478,13 @@ namespace nCine
 					if (SdlInputManager::shouldQuitOnRequest()) {
 						_shouldQuit = true;
 					}
+					break;
+				case SDL_APP_TERMINATING:
+					// iOS (and Android through SDL): the system is about to end the process, nothing follows this
+					_shouldQuit = true;
+					break;
+				case SDL_APP_LOWMEMORY:
+					LOGW("The system is running low on memory");
 					break;
 				case SDL_DISPLAYEVENT:
 					_gfxDevice->updateMonitors();

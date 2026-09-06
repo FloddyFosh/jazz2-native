@@ -1795,6 +1795,13 @@ void GameEventHandler::OnBeginInitialize()
 
 	auto& resolver = ContentResolver::Get();
 
+#if defined(DEATH_TARGET_IOS)
+	// Like Android below: once the app leaves the foreground (SDL reports it as the window losing focus) nothing
+	// may touch the GPU any more - iOS terminates an app that renders in the background - so the whole loop
+	// suspends until it is back, which also saves the game state on the way out (see OnSuspend)
+	theApplication().SetAutoSuspension(true);
+#endif
+
 #if defined(DEATH_TARGET_ANDROID)
 	theApplication().SetAutoSuspension(true);
 
@@ -1807,7 +1814,7 @@ void GameEventHandler::OnBeginInitialize()
 	if (fs::IsReadableFile(mappingsPath)) {
 		theApplication().GetInputManager().addJoyMappingsFromFile(mappingsPath);
 	}
-#elif !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_IOS) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_WINDOWS_RT)
+#elif !defined(DEATH_TARGET_EMSCRIPTEN) && !defined(DEATH_TARGET_SWITCH) && !defined(DEATH_TARGET_WINDOWS_RT)
 	// Try to load gamepad mappings from `Content` directory
 	String mappingsPath = fs::CombinePath(resolver.GetContentPath(), "gamecontrollerdb.txt"_s);
 	if (fs::IsReadableFile(mappingsPath)) {
@@ -1943,6 +1950,7 @@ void GameEventHandler::RefreshCache()
 	{
 		auto s = fs::Open(cachePath, FileAccess::Read);
 		if (s->GetSize() < 16) {
+			LOGI("Cache not found, recreating it");
 			goto RecreateCache;
 		}
 
@@ -1950,6 +1958,11 @@ void GameEventHandler::RefreshCache()
 		std::uint8_t fileType = s->ReadValue<std::uint8_t>();
 		std::uint16_t version = s->ReadValueAsLE<std::uint16_t>();
 		if (signature != 0x2095A59FF0BFBBEF || fileType != ContentFileType::CacheIndex || version != Compatibility::JJ2Anims::CacheVersion) {
+			if (version > 0) {
+				LOGI("Cache is outdated, recreating it (version changed from {} to {})", version, Compatibility::JJ2Anims::CacheVersion);
+			} else {
+				LOGI("Cache is outdated, recreating it (signature or version mismatch)");
+			}
 			goto RecreateCache;
 		}
 
@@ -1968,12 +1981,14 @@ void GameEventHandler::RefreshCache()
 		std::int64_t animsCached = s->ReadValueAsLE<std::int64_t>();
 		std::int64_t animsModified = fs::GetLastModificationTime(animsPath).ToUnixMilliseconds();
 		if (animsModified != 0 && animsCached != animsModified) {
+			LOGI("Cache is outdated, recreating it (animations file modified)");
 			goto RecreateCache;
 		}
 
 		// If some events were added, recreate cache
 		std::uint16_t eventTypeCount = s->ReadValueAsLE<std::uint16_t>();
 		if (eventTypeCount != (std::uint16_t)EventType::Count) {
+			LOGI("Cache is outdated, recreating it (event type count changed from {} to {})", eventTypeCount, (std::uint16_t)EventType::Count);
 			goto RecreateCache;
 		}
 
@@ -2396,6 +2411,12 @@ int PrintVersion(bool logoVisible)
 	}
 	return 0;
 }
+#endif
+
+#if defined(DEATH_TARGET_IOS)
+// SDL2 owns the process entry point on iOS: its SDL2main starts the UIApplication and calls this function
+// (renamed to `SDL_main` by the header) from the application delegate once UIKit is up
+#	include <SDL_main.h>
 #endif
 
 int main(int argc, char** argv)

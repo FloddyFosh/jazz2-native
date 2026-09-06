@@ -7,7 +7,7 @@
 // Compile-time RHI backend selection — exactly one backend is compiled into a binary. The OpenGL
 // family backend (OpenGL 3.3 core / OpenGL ES 3.0 / WebGL 2 / ANGLE) is the default when no
 // `WITH_RHI_*` macro is defined by the build.
-#if !defined(WITH_RHI_GL) && !defined(WITH_RHI_D3D11) && !defined(WITH_RHI_VULKAN) && \
+#if !defined(WITH_RHI_GL) && !defined(WITH_RHI_D3D11) && !defined(WITH_RHI_VULKAN) && !defined(WITH_RHI_METAL) && \
 		!defined(WITH_RHI_SOFTWARE) && !defined(WITH_RHI_GX) && !defined(WITH_RHI_PICA) && !defined(WITH_RHI_PVR) && \
 		!defined(WITH_RHI_GU) && !defined(WITH_RHI_GS) && !defined(WITH_RHI_RDP) && \
 		!defined(WITH_RHI_GXM) && !defined(WITH_RHI_RSX) && !defined(WITH_RHI_LEGACYGL)
@@ -1178,6 +1178,90 @@ namespace nCine::RHI
 
 	// Debug output and object labelling
 	using Debug = RHI::Vulkan::VulkanDebug;
+
+	/**
+		@brief Locates a sub-range within a buffer object, together with its mapped memory
+	*/
+	struct BufferRange
+	{
+		BufferRange()
+			: object(nullptr), size(0), offset(0), mapBase(nullptr) {}
+
+		/** @brief Buffer object the range belongs to */
+		Buffer* object;
+		/** @brief Size of the range in bytes */
+		std::uint32_t size;
+		/** @brief Byte offset of the range within the buffer object */
+		std::uint32_t offset;
+		/** @brief Base pointer of the mapped (or host) buffer memory */
+		std::uint8_t* mapBase;
+	};
+}
+
+#elif defined(WITH_RHI_METAL)
+
+// Rendering capability flags of the selected backend (see the OpenGL arm above for the meaning). Metal is a
+// full-pipeline hardware backend like the OpenGL family, Direct3D 11 and Vulkan: it has programmable shaders
+// (the offline MSL lowering, compiled by the driver at load time) and off-screen render targets, so both
+// `RHI_CAP_SHADERS` and `RHI_CAP_FRAMEBUFFERS` are defined and the pipeline runs the whole bloom / lighting /
+// combine / rescale chain exactly as it does on OpenGL. MSL has no profile limits to trip over, so every rescale
+// filter compiles and `RHI_CAP_HEAVY_RESCALE_SHADERS` holds as well.
+#define RHI_CAP_SHADERS
+#define RHI_CAP_FRAMEBUFFERS
+#define RHI_CAP_HEAVY_RESCALE_SHADERS
+#define RHI_CAP_BATCHING
+
+namespace nCine::RHI::Metal
+{
+	class MetalDevice;
+	class MetalTexture;
+	class MetalBufferObject;
+	class MetalShader;
+	class MetalShaderProgram;
+	class MetalShaderUniforms;
+	class MetalShaderUniformBlocks;
+	class MetalUniform;
+	class MetalUniformBlock;
+	class MetalUniformCache;
+	class MetalUniformBlockCache;
+	class MetalAttribute;
+	class MetalFramebuffer;
+	class MetalRenderbuffer;
+	class MetalRenderTarget;
+	class MetalVertexArray;
+	class MetalVertexFormat;
+	class MetalRhiCapabilities;
+	class MetalDebug;
+}
+
+namespace nCine::RHI
+{
+	// Backend-neutral names for the classes of the selected backend. The render pipeline only refers
+	// to these aliases, so that additional backends only have to provide the same set of names with
+	// the same surface. This header only forward-declares them — include `Rhi.h` for the definitions.
+	using Device = RHI::Metal::MetalDevice;
+	using Texture = RHI::Metal::MetalTexture;
+	using Buffer = RHI::Metal::MetalBufferObject;
+	using Shader = RHI::Metal::MetalShader;
+	using ShaderProgram = RHI::Metal::MetalShaderProgram;
+	using ShaderUniforms = RHI::Metal::MetalShaderUniforms;
+	using ShaderUniformBlocks = RHI::Metal::MetalShaderUniformBlocks;
+	using Uniform = RHI::Metal::MetalUniform;
+	using UniformBlock = RHI::Metal::MetalUniformBlock;
+	using UniformCache = RHI::Metal::MetalUniformCache;
+	using UniformBlockCache = RHI::Metal::MetalUniformBlockCache;
+	using Attribute = RHI::Metal::MetalAttribute;
+	using Framebuffer = RHI::Metal::MetalFramebuffer;
+	using Renderbuffer = RHI::Metal::MetalRenderbuffer;
+	using RenderTarget = RHI::Metal::MetalRenderTarget;
+	using VertexArray = RHI::Metal::MetalVertexArray;
+	using VertexFormat = RHI::Metal::MetalVertexFormat;
+
+	// Runtime capabilities of the selected backend
+	using Capabilities = RHI::Metal::MetalRhiCapabilities;
+
+	// Debug output and object labelling
+	using Debug = RHI::Metal::MetalDebug;
 
 	/**
 		@brief Locates a sub-range within a buffer object, together with its mapped memory
