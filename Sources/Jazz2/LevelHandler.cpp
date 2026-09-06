@@ -238,12 +238,18 @@ namespace Jazz2
 
 		for (std::uint32_t i = 0; i < playerCount; i++) {
 			std::shared_ptr<Actors::Player> player = CreateResumablePlayer((std::int32_t)i);
+			Actors::Player* ptr = player.get();
+
+			// The viewport has to be assigned before the state is applied. InitializeFromStream() restores the
+			// ambient light the checkpoint was taken in by calling SetAmbientLight(), and that only records the
+			// value on the player itself when no viewport targets it yet - the viewport would then be constructed
+			// with the level's default light and keep it, so a level saved in a darkened section resumed at full
+			// brightness. SpawnPlayers() assigns it before ReceiveLevelCarryOver() for the same reason.
+			AssignViewport(ptr);
 			player->InitializeFromStream(this, src, version);
 
-			Actors::Player* ptr = player.get();
 			_players.push_back(ptr);
 			AddActor(player);
-			AssignViewport(ptr);
 		}
 
 		_hud = CreateHUD();

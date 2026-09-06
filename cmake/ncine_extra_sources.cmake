@@ -1423,6 +1423,13 @@ else()
 			pspnet_adhoc
 			pspnet_adhocctl
 			pspwlan
+			# Only for `kuKernelGetModel()`, which names the hardware revision in the startup banner. The
+			# model is a kernel export (`sceKernelGetModel()`) that a user-mode module cannot call, and
+			# kubridge is the relay every custom firmware provides for exactly that - which also means this
+			# is a dependency on kubridge.prx being loaded, so the module fails to start without it. That
+			# is not a new constraint in practice (nothing runs unsigned homebrew without a CFW, and every
+			# one of them ships kubridge), but it is the reason to keep the import to this single call.
+			pspkubridge
 		)
 
 		if(CURL_FOUND)

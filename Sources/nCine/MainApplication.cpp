@@ -79,6 +79,7 @@ extern "C" {
 #	include <pspkernel.h>
 #	include <pspdebug.h>
 #	include <psppower.h>
+#	include <kubridge.h>
 #elif defined(DEATH_TARGET_VITA)
 #	include <vitasdk.h>
 #	include <vitaGL.h>
@@ -234,6 +235,44 @@ namespace nCine
 		return 0;
 	}
 
+#endif
+
+#if defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
+	/**
+		@brief Returns the hardware revision the console reports for itself
+
+		These handhelds shipped in revisions that differ in ways a bug report cannot be read without: a
+		PSP-1000 has half the memory of every later model and no second analog anywhere in the family, and
+		a PlayStation TV is a Vita with no screen, no touch panels and no sixaxis. A desktop log can be
+		read back to a machine from the GPU and driver strings; a console log has nothing of the sort, so
+		the model goes into the banner itself.
+	*/
+	static const char* GetConsoleModelName()
+	{
+#	if defined(DEATH_TARGET_PSP)
+		// `sceKernelGetModel()` is a kernel export and cannot be reached from a user-mode module, so this
+		// goes through kubridge's user-mode relay of it instead (see the `pspkubridge` note in CMake).
+		// The value it returns is the hardware generation minus one - 0 is 01g, 1 is 02g and so on - and
+		// the gaps below (06g, 08g, 10g) are motherboard revisions that were never a retail model.
+		switch (kuKernelGetModel()) {
+			case 0: return "PSP-1000";
+			case 1: return "PSP-2000";
+			case 2: return "PSP-3000 (03g)";
+			case 3: return "PSP-3000 (04g)";
+			case 4: return "PSP-Go";
+			case 6: return "PSP-3000 (07g)";
+			case 8: return "PSP-E1000 (09g)";
+			case 10: return "PSP-E1000 (11g)";
+			default: return "unknown PSP model";
+		}
+#	else
+		switch (sceKernelGetModel()) {
+			case SCE_KERNEL_MODEL_VITA: return "PS Vita";
+			case SCE_KERNEL_MODEL_VITATV: return "PlayStation TV";
+			default: return "unknown PS Vita model";
+		}
+#	endif
+	}
 #endif
 
 	Application& theApplication()
@@ -1208,16 +1247,26 @@ namespace nCine
 #	define INIT_MESSAGE_SUFFIX ""
 #endif
 
-		if (_appCfg.withGraphics) {
+// The graphics backend the build was configured with; the no-graphics path below deliberately names none
 #if defined(WITH_GLFW)
-			LOGI(NCINE_APP_NAME " v" NCINE_VERSION " (GLFW) initializing" INIT_MESSAGE_SUFFIX "...");
+#	define INIT_MESSAGE_BACKEND " (GLFW)"
 #elif defined(WITH_SDL3)
-			LOGI(NCINE_APP_NAME " v" NCINE_VERSION " (SDL3) initializing" INIT_MESSAGE_SUFFIX "...");
+#	define INIT_MESSAGE_BACKEND " (SDL3)"
 #elif defined(WITH_SDL2)
-			LOGI(NCINE_APP_NAME " v" NCINE_VERSION " (SDL2) initializing" INIT_MESSAGE_SUFFIX "...");
+#	define INIT_MESSAGE_BACKEND " (SDL2)"
 #else
-			LOGI(NCINE_APP_NAME " v" NCINE_VERSION " initializing" INIT_MESSAGE_SUFFIX "...");
+#	define INIT_MESSAGE_BACKEND ""
 #endif
+
+// Consoles name the hardware revision they are running on as well (see GetConsoleModelName())
+#if defined(DEATH_TARGET_PSP) || defined(DEATH_TARGET_VITA)
+#	define LOG_INIT_MESSAGE(backend) LOGI(NCINE_APP_NAME " v" NCINE_VERSION backend " initializing" INIT_MESSAGE_SUFFIX " on {}...", GetConsoleModelName())
+#else
+#	define LOG_INIT_MESSAGE(backend) LOGI(NCINE_APP_NAME " v" NCINE_VERSION backend " initializing" INIT_MESSAGE_SUFFIX "...")
+#endif
+
+		if (_appCfg.withGraphics) {
+			LOG_INIT_MESSAGE(INIT_MESSAGE_BACKEND);
 
 			LOGB("Initializing graphics device and input manager...");
 
@@ -1281,7 +1330,7 @@ namespace nCine
 				}
 			}
 		} else {
-			LOGI(NCINE_APP_NAME " v" NCINE_VERSION " initializing" INIT_MESSAGE_SUFFIX "...");
+			LOG_INIT_MESSAGE("");
 
 			_gfxDevice = std::make_unique<NullGfxDevice>();
 			_inputManager = std::make_unique<NullInputManager>();
