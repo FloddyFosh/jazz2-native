@@ -2602,7 +2602,7 @@ msgstr "om het toetsenbord te tonen"
 #. TRANSLATORS: Bottom hint in Connect To Server section, prefixed with key/button to press
 #: Sources/Jazz2/UI/Menu/ServerSelectSection.cpp:445
 msgid "to connect to IP address"
-msgstr "om verbinding te maken met het IP-adre"
+msgstr "om verbinding te maken met het IP-adres"
 
 #: Sources/Jazz2/UI/Menu/SimpleMessageSection.cpp:48
 #: Sources/Jazz2/UI/Multiplayer/MpInGameLobby.cpp:227
