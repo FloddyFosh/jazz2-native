@@ -80,6 +80,11 @@ namespace nCine
 		/** @brief Puts the calling thread to sleep for the given number of milliseconds */
 		static void Sleep(std::uint32_t milliseconds) noexcept;
 
+#if defined(DEATH_TARGET_PSP) || defined(DOXYGEN_GENERATING_OUTPUT)
+		/** @brief Stops the Allegrex FPU trapping on IEEE exceptions; must run on every thread (PSP only) */
+		static void DisableFpuTraps(bool trace);
+#endif
+
 #if defined(WITH_THREADS) || defined(DOXYGEN_GENERATING_OUTPUT)
 		/** @brief Plain function pointer used as a thread entry point */
 		using ThreadFuncDelegate = void (*)(void*);

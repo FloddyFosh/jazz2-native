@@ -48,7 +48,7 @@ namespace Jazz2::Actors::Solid
 		_bridgeType = (BridgeType)params.GetUint8(2);
 		// Limit _heightFactor here, because with higher _heightFactor (for example in "04_haunted1") it starts to be inaccurate.
 		// The divisor is level data and nothing stops it being zero, which is not survivable everywhere: the PSP's
-		// Allegrex traps the IEEE divide-by-zero and the process is gone with no diagnosis (see PspDisableFpuTraps()).
+		// Allegrex traps the IEEE divide-by-zero and the process is gone with no diagnosis (see Thread::DisableFpuTraps()).
 		const std::uint8_t heightDivisor = params.GetUint8(3);
 		_heightFactor = (heightDivisor != 0
 			? std::round(std::min((float)_bridgeWidth / heightDivisor, 38.0f))

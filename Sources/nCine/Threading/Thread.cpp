@@ -1,8 +1,5 @@
 #include "Thread.h"
 #include "../../Main.h"
-#if defined(DEATH_TARGET_PSP)
-#	include "../MainApplication.h"
-#endif
 
 #include <atomic>
 #include <cstring>
@@ -113,6 +110,47 @@ namespace nCine
 		::usleep(microseconds);
 #endif
 	}
+
+#if defined(DEATH_TARGET_PSP)
+
+	/**
+		@brief Stops the FPU trapping on IEEE exceptions, the way every other platform behaves
+
+		The Allegrex takes a floating-point exception when the FCSR enable bits are set, and an unhandled
+		one on this console ends the process instantly - every thread with it, nothing written to the log,
+		and a firmware error code ten seconds later. That is not a theoretical concern: drawing a static
+		sprite computed its frame as `animTime * FrameCount / AnimDuration`, `AnimDuration` is legitimately
+		zero for something that does not animate, and the division alone killed the game. The *value* was
+		harmless (the `% FrameCount` that followed made it zero either way, which is exactly how the same
+		code has always been fine everywhere else) - it was the operation that was fatal.
+
+		C and C++ default to exceptions being non-trapping: `1.0f / 0.0f` is infinity and execution
+		continues. Nothing in the engine installs a handler or reads `fetestexcept()`, so nothing wants the
+		traps, and leaving them armed makes every division in the codebase a place the console can die for
+		reasons that are invisible on any other target. So they are cleared here, and the flags and cause
+		bits with them.
+
+		FCSR (coprocessor 1 control register 31) bits 7-11 are the enables for Inexact, Underflow, Overflow,
+		Divide-by-zero and Invalid; bits 12-17 are the cause bits and 2-6 the sticky flags. The register is
+		per-thread context, so this runs on the main thread at startup and again on every thread started
+		through this class.
+	*/
+	void Thread::DisableFpuTraps(bool trace)
+	{
+		std::uint32_t fcsr = 0;
+		__asm__ __volatile__("cfc1 %0, $31" : "=r"(fcsr));
+		const std::uint32_t before = fcsr;
+		fcsr &= ~std::uint32_t(0x0003FF7C);	// enables (7-11), cause (12-17) and flags (2-6)
+		__asm__ __volatile__("ctc1 %0, $31" :: "r"(fcsr));
+		if (trace) {
+			std::uint32_t after = 0;
+			__asm__ __volatile__("cfc1 %0, $31" : "=r"(after));
+			LOGI("FPU traps disabled: FCSR 0x{:.8x} -> 0x{:.8x} (enables were 0x{:.2x})",
+				before, after, (before >> 7) & 0x1F);
+		}
+	}
+
+#endif
 
 #if defined(WITH_THREADS)
 
@@ -789,8 +827,8 @@ namespace nCine
 	{
 #if defined(DEATH_TARGET_PSP)
 		// FCSR is per-thread context, so a new thread starts with the firmware's enables again - and an
-		// IEEE exception it traps on ends the whole process (see PspDisableFpuTraps())
-		PspDisableFpuTraps(false);
+		// IEEE exception it traps on ends the whole process (see DisableFpuTraps())
+		DisableFpuTraps(false);
 #endif
 
 		Thread t(static_cast<SharedBlock*>(arg));
